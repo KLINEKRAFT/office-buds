@@ -1,0 +1,552 @@
+/*
+ * Office Buds UI chrome.
+ *
+ * The look is deliberately beige-box desktop software: hard edges, chunky bevels, no
+ * rounded corners, no gradients, no soft shadows. The office artwork is the star, so
+ * permanent UI is kept to small floating chips around the edges of the screen.
+ */
+
+:root {
+  --ink: #22222d;
+  --ink-soft: #343445;
+  --cream: #eae6da;
+  --cream-dim: #c5c3be;
+  --slate: #4a4e68;
+  --slate-dark: #2c2c3a;
+  --slate-light: #5f6c8a;
+  --accent: #6f2236;
+  --accent-light: #822b41;
+  --good: #2a6f22;
+
+  --bevel-light: rgba(255, 255, 255, 0.55);
+  --bevel-shade: rgba(0, 0, 0, 0.4);
+
+  --ui-font: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", "Roboto Mono",
+    Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--ink);
+  color: var(--cream);
+  font-family: var(--ui-font);
+  -webkit-font-smoothing: none;
+  overscroll-behavior: none;
+}
+
+body {
+  /* Stops iOS from bouncing the whole page while you drag the joystick. */
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+img,
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ---- shared retro widgets ------------------------------------------------ */
+
+.bevel {
+  border: 2px solid var(--ink);
+  box-shadow:
+    inset 2px 2px 0 0 var(--bevel-light),
+    inset -2px -2px 0 0 var(--bevel-shade);
+}
+
+.btn {
+  appearance: none;
+  background: var(--slate);
+  color: var(--cream);
+  border: 2px solid var(--ink);
+  box-shadow:
+    inset 2px 2px 0 0 var(--bevel-light),
+    inset -2px -2px 0 0 var(--bevel-shade);
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  line-height: 1;
+  transition: none;
+}
+
+.btn:active {
+  box-shadow:
+    inset -2px -2px 0 0 var(--bevel-light),
+    inset 2px 2px 0 0 var(--bevel-shade);
+  transform: translate(1px, 1px);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+
+.btn--primary {
+  background: var(--accent);
+}
+
+.btn--ghost {
+  background: var(--slate-dark);
+}
+
+.field {
+  width: 100%;
+  background: var(--cream);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow:
+    inset 2px 2px 0 0 var(--bevel-shade),
+    inset -2px -2px 0 0 var(--bevel-light);
+  padding: 11px 12px;
+  font-family: var(--ui-font);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  outline: none;
+}
+
+.field::placeholder {
+  color: #8b8880;
+  text-transform: uppercase;
+}
+
+.field:focus {
+  box-shadow:
+    inset 2px 2px 0 0 var(--bevel-shade),
+    inset -2px -2px 0 0 var(--bevel-light),
+    0 0 0 2px var(--accent);
+}
+
+/* ---- title / join screens ------------------------------------------------ */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.16) 0px,
+      rgba(0, 0, 0, 0.16) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(circle at 50% 34%, #3f4359 0%, #22222d 68%);
+}
+
+.screen__inner {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.logo {
+  text-align: center;
+  line-height: 1;
+}
+
+.logo__title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--cream);
+  text-shadow:
+    3px 3px 0 var(--accent),
+    6px 6px 0 var(--ink);
+}
+
+.logo__sub {
+  margin: 12px 0 0;
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: var(--cream-dim);
+}
+
+.panel {
+  background: var(--slate-dark);
+  border: 2px solid var(--ink);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(255, 255, 255, 0.14),
+    inset -2px -2px 0 0 var(--bevel-shade);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--cream-dim);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* ---- character picker ---------------------------------------------------- */
+
+.picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.picker__item {
+  appearance: none;
+  background: var(--slate);
+  border: 2px solid var(--ink);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(255, 255, 255, 0.16),
+    inset -2px -2px 0 0 var(--bevel-shade);
+  padding: 8px 4px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--cream);
+}
+
+.picker__item[aria-pressed="true"] {
+  background: var(--accent);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(255, 255, 255, 0.24),
+    inset -2px -2px 0 0 var(--bevel-shade),
+    0 0 0 2px var(--cream);
+}
+
+.picker__art {
+  width: 72px;
+  height: 72px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+.picker__name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+/* ---- in-game HUD --------------------------------------------------------- */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink);
+  touch-action: none;
+}
+
+.stage__canvas {
+  display: block;
+  touch-action: none;
+}
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  /* Keep chips clear of notches and the home indicator. */
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) calc(env(safe-area-inset-right, 0px) + 8px)
+    calc(env(safe-area-inset-bottom, 0px) + 8px) calc(env(safe-area-inset-left, 0px) + 8px);
+}
+
+.hud > * {
+  pointer-events: auto;
+}
+
+.hud__topleft {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  left: calc(env(safe-area-inset-left, 0px) + 8px);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.hud__topright {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.hud__bottomright {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  right: calc(env(safe-area-inset-right, 0px) + 10px);
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.chip {
+  background: rgba(34, 34, 45, 0.82);
+  border: 2px solid var(--ink);
+  box-shadow: inset 1px 1px 0 0 rgba(255, 255, 255, 0.12);
+  color: var(--cream);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  padding: 6px 8px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+}
+
+.chip--button {
+  cursor: pointer;
+}
+
+.chip__dot {
+  width: 6px;
+  height: 6px;
+  background: var(--good);
+}
+
+.chip__dot--off {
+  background: #8b8880;
+}
+
+.chip__dot--bad {
+  background: var(--accent-light);
+}
+
+.round {
+  width: 52px;
+  height: 52px;
+  background: var(--slate);
+  border: 2px solid var(--ink);
+  box-shadow:
+    inset 2px 2px 0 0 var(--bevel-light),
+    inset -2px -2px 0 0 var(--bevel-shade);
+  color: var(--cream);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0;
+}
+
+.round:active {
+  box-shadow:
+    inset -2px -2px 0 0 var(--bevel-light),
+    inset 2px 2px 0 0 var(--bevel-shade);
+  transform: translate(1px, 1px);
+}
+
+.round--chat {
+  background: var(--accent);
+  width: 60px;
+  height: 60px;
+  font-size: 10px;
+}
+
+.round__glyph {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* ---- chat ---------------------------------------------------------------- */
+
+.composer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px calc(env(safe-area-inset-right, 0px) + 10px)
+    calc(env(safe-area-inset-bottom, 0px) + 10px) calc(env(safe-area-inset-left, 0px) + 10px);
+  background: linear-gradient(to top, rgba(34, 34, 45, 0.96), rgba(34, 34, 45, 0));
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.composer .field {
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.composer .field::placeholder {
+  text-transform: none;
+}
+
+.history {
+  position: fixed;
+  left: calc(env(safe-area-inset-left, 0px) + 8px);
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
+  max-height: min(42vh, 300px);
+  overflow-y: auto;
+  background: rgba(34, 34, 45, 0.94);
+  border: 2px solid var(--ink);
+  box-shadow: inset 1px 1px 0 0 rgba(255, 255, 255, 0.1);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.history__row {
+  display: flex;
+  gap: 6px;
+}
+
+.history__name {
+  color: var(--cream-dim);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  flex: none;
+}
+
+.history__row--own .history__name {
+  color: #e0a3b2;
+}
+
+.history__text {
+  color: var(--cream);
+  word-break: break-word;
+}
+
+.history__empty {
+  color: var(--cream-dim);
+  text-align: center;
+  padding: 6px 0;
+}
+
+/* ---- settings / invite dialogs ------------------------------------------- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 28, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 20;
+}
+
+.modal__box {
+  width: 100%;
+  max-width: 320px;
+  background: var(--slate-dark);
+  border: 2px solid var(--ink);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(255, 255, 255, 0.14),
+    inset -2px -2px 0 0 var(--bevel-shade);
+}
+
+.modal__bar {
+  background: var(--accent);
+  border-bottom: 2px solid var(--ink);
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal__body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal__close {
+  background: none;
+  border: 0;
+  color: var(--cream);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.row > * {
+  flex: 1;
+}
+
+.hint {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--cream-dim);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.invite-code {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-align: center;
+  color: var(--cream);
+  background: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: inset 2px 2px 0 0 var(--bevel-shade);
+  padding: 12px 8px;
+}
+
+.loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--ink);
+  color: var(--cream-dim);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+}
+
+@media (min-width: 720px) {
+  .logo__title {
+    font-size: 38px;
+  }
+}
