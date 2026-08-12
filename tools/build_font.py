@@ -24,6 +24,8 @@ import os
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from pixelpng import save_indexed
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "public", "assets")
 
@@ -100,7 +102,7 @@ def build(name: str, size: int, threshold: int) -> None:
                     px[gx + xx, gy + yy] = (255, 255, 255, 255)
 
     os.makedirs(OUT, exist_ok=True)
-    atlas.save(os.path.join(OUT, f"{name}.png"), optimize=True)
+    save_indexed(atlas, os.path.join(OUT, f"{name}.png"))
 
     with open(os.path.join(OUT, f"{name}.json"), "w") as fh:
         json.dump({
@@ -108,7 +110,7 @@ def build(name: str, size: int, threshold: int) -> None:
             "lineHeight": line_h,
             "spacing": 1,       # extra px the engine inserts between glyphs
             "glyphs": glyphs,
-        }, fh, indent=2)
+        }, fh, separators=(",", ":"))
 
     kb = os.path.getsize(os.path.join(OUT, f"{name}.png")) / 1024
     print(f"{name}.png {max_w}x{height} lineHeight={line_h} glyphs={len(glyphs)} ({kb:.1f} KB)")

@@ -85,7 +85,10 @@ what is about 120cm of real desk, which puts a person at ~41px. Smaller than tha
 glasses and beards turn to mush, which is most of the charm.
 
 Each character atlas holds idle, walking (toward camera, away, and sideways — mirrored for
-left), and a wave, in a 320x240 PNG of about 60 KB.
+left), and a wave, in a 320x240 PNG of about 19 KB. The atlases have hard alpha by
+construction, so they are written as indexed PNGs — roughly a third the size of RGBA with
+no visible change. The furniture atlas keeps its original anti-aliased edges and is left
+as RGBA.
 
 ### The room
 
@@ -128,7 +131,7 @@ network.
 Canvas `fillText` is always antialiased, which looks like mush next to nearest-neighbour
 sprites, so all in-world text is blitted from a bitmap atlas built at 1 bit. There are two
 sizes: 9px for chat and speech bubbles, 7px for the deliberately understated name plates.
-Both are about a kilobyte.
+Both are under two kilobytes.
 
 ### Sound
 
@@ -150,8 +153,10 @@ npm run assets
 - `tools/build_props.py` — packs the furniture, and draws the floor, wall, partition,
   window and door tiles the furniture pack does not include
 - `tools/build_font.py` — rasterises the two bitmap fonts
+- `tools/pixelpng.py` — shared indexed-PNG writer; refuses images with partial alpha and
+  verifies what it wrote still matches the source
 
-The whole art payload is about 140 KB.
+The whole art payload, atlases and manifests together, is about 62 KB.
 
 ## Credits
 

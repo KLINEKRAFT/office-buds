@@ -30,6 +30,8 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image, ImageFilter
 
+from pixelpng import save_indexed
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "art-source", "characters")
 OUT = os.path.join(ROOT, "public", "assets")
@@ -153,7 +155,8 @@ def build_character(key: str, spec: dict) -> dict:
 
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, f"{key}.png")
-    atlas.save(path, optimize=True)
+    # Alpha is hard by construction (see downscale), so this stores as indexed colour.
+    save_indexed(atlas, path)
 
     return {
         "label": spec["label"],
@@ -175,7 +178,7 @@ def main() -> None:
         print(f"{key:9s} {meta['total']:3d} frames  box={meta['box']}  {size/1024:.1f} KB")
 
     with open(os.path.join(OUT, "characters.json"), "w") as fh:
-        json.dump(manifest, fh, indent=2)
+        json.dump(manifest, fh, separators=(",", ":"))
     print("wrote public/assets/characters.json")
 
 

@@ -284,7 +284,7 @@ def main() -> None:
         "sprites": {k: {"x": v[0], "y": v[1], "w": v[2], "h": v[3]} for k, v in sorted(placed.items())},
     }
     with open(os.path.join(OUT, "props.json"), "w") as fh:
-        json.dump(manifest, fh, indent=2)
+        json.dump(manifest, fh, separators=(",", ":"))
 
     kb = os.path.getsize(os.path.join(OUT, "props.png")) / 1024
     print(f"packed {len(placed)} sprites into {W}x{H} props.png ({kb:.1f} KB)")
