@@ -44,8 +44,20 @@ export const BUBBLE_MAX_W = 104; // world px before wrapping
 export const MAX_MESSAGE_LEN = 140;
 export const CHAT_HISTORY_LIMIT = 60;
 
-/** Emotes are one-shot animations any player can trigger. */
-export const EMOTE_WAVE = 1;
+/**
+ * Emotes are one-shot clips, referenced by clip name. Which ones a character actually
+ * has depends on the art - Colin has a laptop animation, Michael does not - so the UI
+ * reads the list off the atlas manifest rather than hard-coding it.
+ */
+export const EMOTES: Array<{ clip: string; label: string; glyph: string }> = [
+  { clip: "wave", label: "WAVE", glyph: "\u270B" },
+  { clip: "laptop", label: "LAPTOP", glyph: "\u{1F4BB}" },
+];
+
+/** How long a room-change announcement stays on screen. */
+export const ANNOUNCE_MS = 3200;
+/** Fade the screen through black for this long on each side of a room change. */
+export const TRANSITION_MS = 260;
 
 /** Touch joystick, in world px (it is drawn into the world canvas so it stays chunky). */
 export const STICK_RADIUS = 22;

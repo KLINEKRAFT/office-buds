@@ -39,9 +39,11 @@ function cubicle(
 export const office: RoomDef = {
   id: "office",
   name: "THE OFFICE",
+  atlas: "office",
   widthTiles: 28,
   heightTiles: 22,
   wallHeight: WALL,
+  groundTiles: ["floor_a", "floor_b"],
 
   // Warm carpet through the break area and lounge, so the right-hand side of the floor
   // reads as somewhere you hang out rather than somewhere you work.
@@ -134,14 +136,32 @@ export const office: RoomDef = {
     { sprite: "small_plant", x: 176, y: 372 },
   ],
 
-  // Keep players out of the doorway recess itself.
-  blockers: [{ x: 292, y: WALL - 3, w: 18, h: 5 }],
+  // No blocker across the doorway any more - walking into it is how you get outside.
 
   // Both spawns are in the top corridor just inside the door, so arriving feels like
   // walking into the office - and so two friends land within sight of each other.
+  // Offset to either side of the doorway on purpose. Spawning directly under it meant
+  // the very first press of "up" walked you straight back out and away from your friend.
   spawns: [
-    { x: 286, y: 64 },
-    { x: 318, y: 72 },
+    { x: 250, y: 72 },
+    { x: 344, y: 80 },
+    // Index 2: where you land coming back from outside. Deliberately clear of the exit
+    // rect below, or you would bounce straight back out again on arrival.
+    { x: 300, y: 68 },
+  ],
+  joinSpawns: 2,
+
+  // Walking into the doorway steps outside - only you. Saying it takes everyone.
+  // Reaches up to the wall base so walking into the door actually lands inside it.
+  exits: [{ rect: { x: 292, y: WALL, w: 18, h: 10 }, to: "outside", spawn: 0, label: "GO OUTSIDE" }],
+
+  sayTriggers: [
+    {
+      phrases: ["lets go outside", "let's go outside", "go outside", "outside?", "wanna go outside"],
+      to: "outside",
+      spawn: 0,
+      announce: "{name} TOOK EVERYONE OUTSIDE",
+    },
   ],
 
   // Reserved for the small interactions in a later pass - nothing reads these yet.

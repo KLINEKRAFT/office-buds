@@ -69,6 +69,9 @@ CHARACTERS: dict[str, dict] = {
             Clip("idle_side", "Colin_walk_right_sheet.png", (7,), 2),
             Clip("idle_up", "colin_turn_walk_away_sheet.png", (4,), 2),
             Clip("wave", "Colin_wave_animation_sheet.png", tuple(range(8)), 9, loop=False),
+            # Colin gets his laptop out. Held on the last frame rather than looping, so
+            # he stays sitting there with it open until he moves.
+            Clip("laptop", "Colin_laptop_animation_sheet.png", tuple(range(8)), 7, loop=False),
         ],
     },
     "michael": {

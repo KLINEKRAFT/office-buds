@@ -1,4 +1,4 @@
-import { EMOTE_WAVE, FRAME, WALK_FPS_AT_FULL_SPEED, WALK_SPEED } from "../config";
+import { FRAME, WALK_FPS_AT_FULL_SPEED, WALK_SPEED } from "../config";
 import type { CharacterMeta } from "./assets";
 import type { Dir, Player } from "../types";
 
@@ -27,8 +27,8 @@ export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pos
   let clipName: string;
   let time: number;
 
-  if (player.emote === EMOTE_WAVE && meta.clips.wave) {
-    clipName = "wave";
+  if (player.emote && meta.clips[player.emote]) {
+    clipName = player.emote;
     time = player.emoteTime;
   } else if (player.moving) {
     clipName = `walk_${suffix(player.dir)}`;
@@ -47,7 +47,9 @@ export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pos
   }
 
   const raw = Math.floor(time * fps);
-  const index = clip.loop ? ((raw % clip.count) + clip.count) % clip.count : Math.min(raw, clip.count - 1);
+  const index = clip.loop
+    ? ((raw % clip.count) + clip.count) % clip.count
+    : Math.min(raw, clip.count - 1);
   const frame = clip.start + index;
 
   // Single-frame idles get a gentle 1px rise so nobody looks frozen.
@@ -61,10 +63,21 @@ export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pos
   };
 }
 
-/** True once a non-looping emote has played out. */
-export function emoteFinished(meta: CharacterMeta, emote: number, time: number): boolean {
-  if (emote !== EMOTE_WAVE) return true;
-  const clip = meta.clips.wave;
+/**
+ * Emotes that hold on their last frame - the laptop, say - stay until the player moves
+ * or triggers something else, rather than snapping back after a second.
+ */
+const HOLD_FOREVER = new Set(["laptop"]);
+
+export function emoteFinished(meta: CharacterMeta, emote: string, time: number): boolean {
+  if (!emote) return true;
+  const clip = meta.clips[emote];
   if (!clip) return true;
+  if (HOLD_FOREVER.has(emote)) return false;
   return time >= clip.count / clip.fps;
+}
+
+/** Emote clip names this character actually has art for. */
+export function availableEmotes(meta: CharacterMeta, candidates: string[]): string[] {
+  return candidates.filter((c) => Boolean(meta.clips[c]));
 }

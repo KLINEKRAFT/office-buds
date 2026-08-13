@@ -61,8 +61,15 @@ export class SupabaseNet implements Net {
         y: p.y,
         dir: p.dir ?? "down",
         moving: !!p.moving,
-        emote: p.emote ?? 0,
+        emote: typeof p.emote === "string" ? p.emote : "",
+        room: typeof p.room === "string" ? p.room : "office",
       });
+    });
+
+    channel.on("broadcast", { event: "g" }, ({ payload }) => {
+      const p = payload as { id?: string; room?: string; spawn?: number; announce?: string };
+      if (!p?.id || p.id === this.id || typeof p.room !== "string") return;
+      this.handlers?.onGo(p.id, p.room, p.spawn ?? 0, p.announce ?? "");
     });
 
     channel.on("broadcast", { event: "c" }, ({ payload }) => {
@@ -142,6 +149,15 @@ export class SupabaseNet implements Net {
       type: "broadcast",
       event: "c",
       payload: { id: this.id, text, at: Date.now() },
+    });
+  }
+
+  sendGo(room: string, spawn: number, announce: string): void {
+    if (!this.channel) return;
+    void this.channel.send({
+      type: "broadcast",
+      event: "g",
+      payload: { id: this.id, room, spawn, announce },
     });
   }
 

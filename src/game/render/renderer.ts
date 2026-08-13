@@ -102,6 +102,8 @@ export class Renderer {
     localSpeed: number,
     stick: StickView | null,
     now: number,
+    /** 0 = clear, 1 = fully black. Used to cover a room change. */
+    fade = 0,
   ): void {
     const ctx = this.ctx;
     const cam = camera.offset();
@@ -128,7 +130,7 @@ export class Renderer {
       items.push({
         sortY: p.sortY,
         draw: () =>
-          drawSprite(ctx, this.assets.props.image, p.rect, p.x - cam.x, p.y - cam.y, p.flip),
+          drawSprite(ctx, room.atlas, p.rect, p.x - cam.x, p.y - cam.y, p.flip),
       });
     }
 
@@ -164,20 +166,43 @@ export class Renderer {
 
     // ---- overlays ----------------------------------------------------------
     // Drawn after every sprite so a name or bubble is never hidden behind furniture.
+    // Name plates get stacked rather than overlapped. Two friends standing on the same
+    // spot is the normal case in this game, and un-nudged the plates overprint into an
+    // unreadable smear.
     const sorted = [...players].sort((a, b) => a.renderY - b.renderY);
+    const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const lineH = this.fontSmall.lineHeight;
     for (const player of sorted) {
       const cx = Math.round(player.renderX) - cam.x;
       const feetY = Math.round(player.renderY) - cam.y;
-      drawNameTag(ctx, this.fontSmall, player.name, cx, feetY + 3);
+      const w = this.fontSmall.measure(player.name) + 2;
+      let y = feetY + 3;
+      const box = () => ({ x: cx - w / 2, y, w, h: lineH });
+      for (let guard = 0; guard < 6; guard++) {
+        const b = box();
+        if (!placed.some((p) => p.x < b.x + b.w && p.x + p.w > b.x && p.y < b.y + b.h && p.y + p.h > b.y)) {
+          break;
+        }
+        y += lineH + 1;
+      }
+      placed.push(box());
+      drawNameTag(ctx, this.fontSmall, player.name, cx, y);
     }
     for (const player of sorted) {
       if (!player.bubble) continue;
-      const fade = bubbleFade(player.bubble, now);
-      if (fade >= 1) continue;
+      const gone = bubbleFade(player.bubble, now);
+      if (gone >= 1) continue;
       const cx = Math.round(player.renderX) - cam.x;
       const headY = Math.round(player.renderY) - cam.y - FRAME;
-      ctx.globalAlpha = 1 - fade;
+      ctx.globalAlpha = 1 - gone;
       drawBubble(ctx, this.font, player.bubble, cx, headY - 1);
+      ctx.globalAlpha = 1;
+    }
+
+    if (fade > 0) {
+      ctx.globalAlpha = Math.min(1, fade);
+      ctx.fillStyle = PALETTE.ink;
+      ctx.fillRect(0, 0, viewW, viewH);
       ctx.globalAlpha = 1;
     }
 
