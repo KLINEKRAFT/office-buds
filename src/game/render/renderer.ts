@@ -12,6 +12,7 @@ import {
   MAX_SCALE,
   MIN_SCALE,
   PALETTE,
+  RUN_SPEED,
   STICK_RADIUS,
   TARGET_VIEW_H,
   WALK_SPEED,
@@ -241,7 +242,8 @@ export class Renderer {
       // Uses the pack's own wraith rather than any new art, and the name plate stays so
       // it is obvious who is gone.
       const ghost = player.ascended ? room.sprites.wraith : undefined;
-      const speed = player.id === localId ? localSpeed : WALK_SPEED;
+      const speed =
+        player.id === localId ? localSpeed : player.running ? RUN_SPEED : WALK_SPEED;
       const pose = poseFor(player, asset.meta, speed);
       const cx = Math.round(player.renderX) - cam.x;
       const feetY = Math.round(player.renderY) - cam.y;

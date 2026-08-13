@@ -18,6 +18,10 @@ from PIL import Image
 TRANSPARENT_INDEX = 255
 
 
+class TooManyColoursError(ValueError):
+    """The image will not survive a 256-colour palette without visible banding."""
+
+
 class PartialAlphaError(ValueError):
     pass
 
@@ -72,4 +76,7 @@ def _verify(source: Image.Image, path: str) -> None:
     if opaque.any():
         delta = int(np.abs(a[opaque][:, :3].astype(int) - b[opaque][:, :3].astype(int)).max())
         if delta > 72:
-            raise ValueError(f"{path}: colour shifted by {delta} on write")
+            # Not a corrupt write - the image genuinely has more colours than a palette
+            # holds, and quantising it damaged the art. The caller decides whether to
+            # drop back to RGBA rather than ship banding.
+            raise TooManyColoursError(f"{path}: colour shifted by {delta} on write")

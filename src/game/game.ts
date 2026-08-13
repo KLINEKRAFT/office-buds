@@ -11,6 +11,7 @@ import {
   FEED_LIMIT,
   REACH_DIST,
   REVENGE_MS,
+  RUN_SPEED,
   REMOTE_SMOOTHING,
   REMOTE_SNAP_DIST,
   TARGET_VIEW_H,
@@ -163,6 +164,7 @@ export class Game {
       renderY: free.y,
       dir: start.dir,
       moving: false,
+      running: false,
       emote: "",
       room: room.def.id,
       carrying: -1,
@@ -227,6 +229,7 @@ export class Game {
             x: Math.round(p.x),
             y: Math.round(p.y),
             emote: p.emote,
+            running: p.running,
             carrying: p.carrying,
             ascended: p.ascended,
             dead: p.dead,
@@ -270,6 +273,7 @@ export class Game {
           renderY: spawn.y,
           dir: "down",
           moving: false,
+          running: false,
           emote: "",
           room: this.local.room,
           carrying: -1,
@@ -295,6 +299,7 @@ export class Game {
         if (!p) return;
         p.dir = state.dir;
         p.moving = state.moving;
+        p.running = state.running;
         p.room = state.room;
         p.carrying = state.carrying;
         p.ascended = state.ascended;
@@ -660,7 +665,11 @@ export class Game {
     // what makes it land; the leader saying "rise" is what gives you your legs back.
     const v = p.ascended || p.dead >= 0 ? { x: 0, y: 0 } : this.input.vector();
     const mag = Math.hypot(v.x, v.y);
-    this.localSpeed = mag * WALK_SPEED;
+    // A thumb already has a way to ask for more speed - push the stick further - so
+    // touch needs no second control. A keyboard has no such axis, hence Shift.
+    p.running = mag > 0 && this.input.running();
+    const top = p.running ? RUN_SPEED : WALK_SPEED;
+    this.localSpeed = mag * top;
 
     if (p.emote) {
       p.emoteTime += dt;
@@ -677,8 +686,8 @@ export class Game {
         this.room,
         p.x,
         p.y,
-        v.x * WALK_SPEED * dt,
-        v.y * WALK_SPEED * dt,
+        v.x * top * dt,
+        v.y * top * dt,
       );
       const actuallyMoved = moved.x !== p.x || moved.y !== p.y;
       p.x = moved.x;
@@ -688,6 +697,7 @@ export class Game {
       p.moving = actuallyMoved;
     } else {
       p.moving = false;
+      p.running = false;
     }
 
     p.renderX = p.x;
@@ -783,6 +793,7 @@ export class Game {
       y: Math.round(p.y * 2) / 2,
       dir: p.dir,
       moving: p.moving,
+      running: p.running,
       emote: p.emote,
       room: p.room,
       carrying: p.carrying,
@@ -795,6 +806,7 @@ export class Game {
       !prev ||
       prev.dir !== state.dir ||
       prev.moving !== state.moving ||
+      prev.running !== state.running ||
       prev.emote !== state.emote ||
       prev.room !== state.room ||
       prev.carrying !== state.carrying ||

@@ -18,7 +18,9 @@ is Colin, Michael, Alexis, Melanie and Tiffany; anyone else gets in as a guest.
 
 - **Phone** — touch anywhere on the office and drag. A small joystick appears under your
   thumb, so it never sits on top of the artwork and works in either hand.
-- **Desktop** — WASD or the arrow keys.
+- **Desktop** — WASD or the arrow keys. Hold **shift** to run.
+- **Running** on a phone needs no second control: push the stick all the way over. A thumb
+  already has a way to ask for more speed.
 - **CHAT** opens the composer. What you send floats above your head for a few seconds
   (longer messages linger longer) and your friend sees it in real time.
 - **EMOTE** opens a tray: wave, jump, dance, spin, panic, faint — and, for whoever has
@@ -171,6 +173,26 @@ Sheets do not all come back from the generator standing on the floor of their 64
 some sit 15-20px high, which at 1/16 scale leaves a character hovering above their own
 shadow. The builder measures each character once and drops every one of their frames by
 the same amount, which closes the gap without disturbing the shared anchor.
+
+### Running
+
+Colin has a ten-frame side run that sat in `art-source/` from the first batch, named for a
+front view it does not contain, wired to nothing. It has a speed to belong to now: shift on
+a keyboard, or the stick at full travel on a phone, moves you about half again as fast.
+
+Only Colin has the sheet, and only from the side, so everybody else — and every other
+facing — gets the walk cycle played faster. Same trade the emotes make: hand-drawn art
+where it exists, the closest honest thing where it does not.
+
+`running` is on the wire, which felt like a field too many until you notice that a remote
+player's speed is *assumed* rather than measured — the renderer has no way to tell a
+sprint from a stroll, so without it everybody else's run is drawn as a walk.
+
+Adding those ten frames pushed Colin's atlas past what a 256-colour palette can hold. The
+writer refuses rather than quietly banding the art, so his sheet is now RGBA — 140 KB
+against the other four at ~18 KB, which is the real cost of art with 24,000 colours in it
+rather than 250. Worth knowing if the payload ever matters: the other four are genuinely
+palette-sized and he never was.
 
 ### Emotes, for everybody
 

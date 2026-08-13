@@ -30,7 +30,7 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image, ImageFilter
 
-from pixelpng import save_indexed
+from pixelpng import TooManyColoursError, save_indexed
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "art-source", "characters")
@@ -79,6 +79,9 @@ CHARACTERS: dict[str, dict] = {
             # until he moves - the pose an item gets drawn into later.
             Clip("lift", "Colin_lift.png", tuple(range(8)), 9, loop=False),
             Clip("jump", "Colin_front_jump_sheet.png", tuple(range(8)), 12, loop=False),
+            # Ten frames of a side run. The file has been sitting here since the first
+            # batch, named for a front view it does not contain, wired to nothing.
+            Clip("run_side", "Colin_front_front_run_run_sheet.png", tuple(range(10)), 14),
         ],
     },
     "michael": {
@@ -219,7 +222,14 @@ def build_character(key: str, spec: dict) -> dict:
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, f"{key}.png")
     # Alpha is hard by construction (see downscale), so this stores as indexed colour.
-    save_indexed(atlas, path)
+    # Indexed where it fits, RGBA where it does not. Colin crossed 256 colours when his
+    # run cycle went in; banding a character to save 30 KB is the wrong trade, and the
+    # writer refusing rather than quietly quantising is what surfaced it.
+    try:
+        save_indexed(atlas, path)
+    except TooManyColoursError:
+        atlas.save(path, optimize=True)
+        print(f"  {os.path.basename(path)}: too many colours for a palette, kept RGBA")
 
     return {
         "label": spec["label"],

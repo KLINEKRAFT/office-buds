@@ -440,6 +440,58 @@ check("the rite logs no errors", () => {
 });
 
 // ---------------------------------------------------------------------------------
+suite("running");
+
+const run = await scenario(async (ctx) => {
+  const page = await joinAs(ctx, "COLIN");
+  const where = async () =>
+    (await buds(page, () => window.__buds.players())).find((p) => p.isLocal);
+
+  // The same hold, down the same open stretch of hallway, walked and then run.
+  await buds(page, () => window.__buds.place(104, 200));
+  await page.waitForTimeout(200);
+  await walk(page, "ArrowDown", 600);
+  const walked = (await where()).y - 200;
+
+  await buds(page, () => window.__buds.place(104, 200));
+  await page.waitForTimeout(200);
+  await page.bringToFront();
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("ArrowDown");
+  await page.waitForTimeout(600);
+  const during = await where();
+  await page.keyboard.up("ArrowDown");
+  await page.keyboard.up("Shift");
+  await page.waitForTimeout(120);
+  const ran = during.y - 200;
+  const after = await where();
+
+  return { walked, ran, during, after, errors: noisyErrors(page) };
+});
+
+check("holding shift covers more ground", () => {
+  assert.ok(run.walked > 10, `did not walk at all (${run.walked}px)`);
+  assert.ok(
+    run.ran > run.walked * 1.3,
+    `ran ${run.ran.toFixed(0)}px against a walk of ${run.walked.toFixed(0)}px`,
+  );
+});
+
+check("and says so, because nobody else can tell by looking", () => {
+  // A remote player's speed is assumed rather than measured, so without the flag on the
+  // wire everybody else's sprint is drawn as a stroll.
+  assert.equal(run.during.running, true);
+});
+
+check("letting go stops the run", () => {
+  assert.equal(run.after.running, false);
+});
+
+check("running logs no errors", () => {
+  assert.deepEqual(run.errors, []);
+});
+
+// ---------------------------------------------------------------------------------
 suite("ways michael can die");
 
 const doom = await scenario(async (ctx) => {
