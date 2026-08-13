@@ -227,6 +227,18 @@ in the real manifest, and fails if any of them indexes a frame outside that char
 own atlas. The arithmetic is the risky part: an off-by-one there draws somebody else's
 sprite, and it would look like a glitch rather than a bug.
 
+### Punching
+
+Colin has a front attack and a side attack, eight frames each. **PUNCH** is in the emote
+tray, and it is also what killing somebody looks like: pick a way from the END tray and
+he turns to face them and swings, while their topple eases in over a third of a second —
+so the punch and the fall overlap rather than the body dropping before the arm moves.
+
+The side sheet is authored facing right and mirrored for left, like every other side clip
+here. There is an authored left-facing sheet too; it is not packed, because eight more
+frames on an atlas that has already outgrown a palette is a poor trade for a mirror the
+engine does anyway.
+
 ### Ways to go
 
 You can kill anybody in the room, and anybody can kill you. Walk up to somebody, tap

@@ -91,7 +91,7 @@ for (const [name, id] of CAST) {
   check(`${name} is offered a full set of emotes`, () => {
     assert.ok(
       result.emotes.length >= 6,
-      `${name} only gets ${result.emotes.length}: ${result.emotes.join(", ")}`,
+      `${name} only gets ${result.emotes.length}: ${result.emotes.map((e) => e.clip).join(", ")}`,
     );
   });
 
@@ -106,12 +106,14 @@ suite("every emote actually plays, for everyone");
 for (const [name] of CAST) {
   const played = await scenario(async (ctx) => {
     const page = await joinAs(ctx, name);
-    const clips = await buds(page, () => window.__buds.emotes());
+    const offered = await buds(page, () => window.__buds.emotes());
     const out = [];
-    for (const clip of clips) {
-      // Open the tray, tap the emote, read back what the game is playing.
+    for (const { clip, label } of offered) {
+      // Open the tray, tap the emote, read back what the game is playing. The label comes
+      // from the game rather than from a copy kept here - the copy went stale the moment
+      // a button was added, and cost a whole suite run to notice.
       await tap(page, '.hud__bottomright .round:has-text("EMOTE")');
-      await tap(page, `.tray .round:has-text("${labelFor(clip)}")`);
+      await tap(page, `.tray .round:has-text("${label}")`);
       // Wait for the state rather than sleeping at it. A fixed pause raced the frame
       // that clears an emote when you are still moving, and failed about one run in ten
       // on whichever emote happened to follow a long one.
@@ -139,11 +141,6 @@ for (const [name] of CAST) {
   check(`${name} emotes without errors`, () => {
     assert.deepEqual(played.errors, []);
   });
-}
-
-/** The tray buttons are labelled, not named by clip. Mirrors EMOTES in core/emotes.ts. */
-function labelFor(clip) {
-  return { wave: "WAVE", jump: "JUMP", dance: "DANCE", spin: "SPIN", panic: "PANIC", faint: "FAINT", laptop: "WORK" }[clip] ?? clip.toUpperCase();
 }
 
 // ---------------------------------------------------------------------------------
@@ -499,15 +496,18 @@ const doom = await scenario(async (ctx) => {
   const mike = await joinAs(ctx, "MICHAEL");
   await colin.waitForTimeout(900);
 
-  // Stand them together - you have to walk up to somebody to do this.
-  await buds(colin, () => window.__buds.place(168, 300));
-  await buds(mike, () => window.__buds.place(180, 300));
+  // Stand them together, Michael to Colin's right - you have to walk up to somebody to
+  // do this, and which way Colin turns is part of what should happen.
+  await buds(colin, () => window.__buds.place(104, 220));
+  await buds(mike, () => window.__buds.place(126, 220));
   await colin.waitForTimeout(500);
 
   const offered = await buds(colin, () => window.__buds.victim());
   await tap(colin, '.hud__bottomright .round:has-text("END MICHAEL")');
   await colin.waitForTimeout(150);
   await tap(colin, '.tray--doom .round:has-text("PRINTER")');
+  await colin.waitForTimeout(180);
+  const swinging = (await buds(colin, () => window.__buds.players())).find((p) => p.isLocal);
   await colin.waitForTimeout(600);
 
   const onMikesScreen = (await buds(mike, () => window.__buds.players())).find((p) => p.isLocal);
@@ -536,6 +536,7 @@ const doom = await scenario(async (ctx) => {
   const moved = (await buds(mike, () => window.__buds.players())).find((p) => p.isLocal).x;
 
   return {
+    swinging,
     feed,
     scores,
     grudge,
@@ -558,6 +559,11 @@ check("the victim goes down, on their own screen and everyone else's", () => {
   assert.ok(doom.onMikesScreen.dead >= 0, "Michael does not think he is dead");
   assert.ok(doom.seenByColin.dead >= 0, "Colin cannot see that Michael is dead");
   assert.equal(doom.onMikesScreen.dead, doom.seenByColin.dead, "they disagree about the cause");
+});
+
+check("you throw a punch, facing the person you are throwing it at", () => {
+  assert.equal(doom.swinging.emote, "attack", "no swing");
+  assert.equal(doom.swinging.dir, "right", "did not turn to face him");
 });
 
 check("everyone gets the headline", () => {

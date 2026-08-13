@@ -202,6 +202,7 @@ export const EMOTES: EmoteDef[] = [
   { clip: "spin", label: "SPIN", glyph: "\u{1F300}", proc: "spin" },
   { clip: "panic", label: "PANIC", glyph: "\u{1F631}", proc: "panic" },
   { clip: "faint", label: "FAINT", glyph: "\u{1F480}", proc: "faint" },
+  { clip: "attack", label: "PUNCH", glyph: "\u{1F44A}", art: "attack" },
   { clip: "laptop", label: "WORK", glyph: "\u{1F4BB}", art: "laptop" },
 ];
 
