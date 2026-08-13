@@ -83,6 +83,79 @@ def carpet(variant: int, base, fleck, seam) -> Image.Image:
     return im
 
 
+# The rug is the one warm thing in a room of slate and navy. Kept muted so it sits
+# with the imported furniture instead of shouting over it.
+RUG = {
+    "base": (86, 62, 64),
+    "fleck": (100, 74, 74),
+    "seam": (72, 51, 54),
+    "band": (134, 100, 84),
+    "edge": (58, 42, 46),
+}
+
+
+def rug_tile(top: bool, left: bool, bottom: bool, right: bool, variant: int) -> Image.Image:
+    """
+    One 16x16 slice of a bordered rug. The flags say which sides face the outside, so
+    the same routine draws all nine pieces of the set.
+
+    Zoning the floor with carpet variants (see `carpet`) reads as carpet laid
+    differently; that is right for a break area but wrong for a rug, which wants a real
+    hem you can see the edge of. Hence a proper nine-slice rather than another tile pair.
+    """
+    im = solid(TILE, TILE, RUG["base"])
+    px = im.load()
+    r = random.Random(4000 + variant)
+    for _ in range(18):
+        px[r.randrange(TILE), r.randrange(TILE)] = (*RUG["fleck"], 255)
+    for _ in range(10):
+        px[r.randrange(TILE), r.randrange(TILE)] = (*RUG["seam"], 255)
+
+    d = ImageDraw.Draw(im)
+    last = TILE - 1
+
+    # Order matters: weave, then the keyline, then the outer hem. Drawing the hem last
+    # is what keeps the silhouette unbroken where two borders meet at a corner.
+    if top:
+        d.rectangle([0, 1, last, 2], fill=RUG["band"])
+    if bottom:
+        d.rectangle([0, last - 2, last, last - 1], fill=RUG["band"])
+    if left:
+        d.rectangle([1, 0, 2, last], fill=RUG["band"])
+    if right:
+        d.rectangle([last - 2, 0, last - 1, last], fill=RUG["band"])
+
+    if top:
+        d.rectangle([0, 3, last, 3], fill=RUG["edge"])
+    if bottom:
+        d.rectangle([0, last - 3, last, last - 3], fill=RUG["edge"])
+    if left:
+        d.rectangle([3, 0, 3, last], fill=RUG["edge"])
+    if right:
+        d.rectangle([last - 3, 0, last - 3, last], fill=RUG["edge"])
+
+    if top:
+        d.rectangle([0, 0, last, 0], fill=RUG["edge"])
+    if bottom:
+        d.rectangle([0, last, last, last], fill=RUG["edge"])
+    if left:
+        d.rectangle([0, 0, 0, last], fill=RUG["edge"])
+    if right:
+        d.rectangle([last, 0, last, last], fill=RUG["edge"])
+    return im
+
+
+def rug_set() -> dict[str, Image.Image]:
+    """The nine slices, named `rug_<vertical><horizontal>` to match FloorZone.nine."""
+    rows = [("t", True, False), ("m", False, False), ("b", False, True)]
+    cols = [("l", True, False), ("c", False, False), ("r", False, True)]
+    out: dict[str, Image.Image] = {}
+    for i, (vk, top, bottom) in enumerate(rows):
+        for j, (hk, left, right) in enumerate(cols):
+            out[f"rug_{vk}{hk}"] = rug_tile(top, left, bottom, right, i * 3 + j)
+    return out
+
+
 def wall_tile() -> Image.Image:
     """16x16 of flat upper wall with a faint vertical streak."""
     im = solid(TILE, TILE, PAL["wall"])
@@ -227,6 +300,7 @@ def generated() -> dict[str, Image.Image]:
         "floor_b": carpet(1, cool[1], PAL["carpet_fleck"], PAL["carpet_seam"]),
         "floor_warm_a": carpet(2, warm_a, warm_fleck, warm_seam),
         "floor_warm_b": carpet(3, warm_b, warm_fleck, warm_seam),
+        **rug_set(),
         "wall": wall_tile(),
         "wall_cap": wall_cap(),
         "baseboard": baseboard(),

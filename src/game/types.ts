@@ -1,5 +1,5 @@
 export type Dir = "up" | "down" | "left" | "right";
-export type CharacterId = "colin" | "michael";
+export type CharacterId = "colin" | "michael" | "alexis" | "melanie" | "tiffany";
 
 export interface Vec2 {
   x: number;
@@ -27,6 +27,16 @@ export interface PlayerState {
   emote: string;
   /** Which room this player is standing in. Players elsewhere are not drawn. */
   room: string;
+  /**
+   * Index into the room's prop list of the thing this player is holding, or -1.
+   *
+   * The whole of the world's "what has been picked up" state lives in this one
+   * replicated field, which is what makes it impossible to desync: a takeable prop is
+   * drawn unless somebody in the room is carrying it, and everyone already receives
+   * everyone's carrying value on the movement heartbeat. Nothing has to be replayed for
+   * a late joiner and no separate take/drop event can be missed.
+   */
+  carrying: number;
 }
 
 export interface Player extends PlayerState {

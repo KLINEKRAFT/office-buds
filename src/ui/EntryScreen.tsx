@@ -2,18 +2,19 @@
 
 import { useEffect, useState } from "react";
 
-import type { CharacterId } from "@/game/types";
+import { castFor, type CastMember } from "@/game/cast";
 import { loadProfile, sanitizeName, saveProfile } from "@/lib/room";
-import { CharacterPicker } from "./CharacterPicker";
 
-export interface EntryResult {
-  name: string;
-  character: CharacterId;
-}
+export type EntryResult = CastMember;
 
 /**
- * The one gate before the office. Doubles as the audio unlock, since browsers only
- * allow sound to start from a real tap.
+ * The one gate before the office. Type your first name and go.
+ *
+ * It deliberately shows you nothing about who you are about to be. The character is
+ * looked up from your name, and finding out which one by walking into the room as them
+ * is the whole moment - a preview here would spend it before you arrive.
+ *
+ * Doubles as the audio unlock, since browsers only allow sound to start from a real tap.
  */
 export function EntryScreen({
   action,
@@ -29,27 +30,23 @@ export function EntryScreen({
   onSubmit(result: EntryResult): void;
 }) {
   const [name, setName] = useState("");
-  const [character, setCharacter] = useState<CharacterId>("colin");
   const [ready, setReady] = useState(false);
 
-  // Remember the last name and character so a returning player is one tap from the door.
   useEffect(() => {
     const profile = loadProfile();
-    if (profile) {
-      setName(profile.name);
-      setCharacter(profile.character);
-    }
+    if (profile) setName(profile.name);
     setReady(true);
   }, []);
 
   const clean = sanitizeName(name);
+  const member = castFor(clean);
   const canSubmit = clean.length > 0 && !busy;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
-    saveProfile({ name: clean, character });
-    onSubmit({ name: clean, character });
+    saveProfile({ name: member.name });
+    onSubmit(member);
   };
 
   return (
@@ -57,27 +54,23 @@ export function EntryScreen({
       <form className="screen__inner" onSubmit={submit}>
         <div className="logo">
           <h1 className="logo__title">OFFICE BUDS</h1>
-          <p className="logo__sub">
-            {roomCode ? `OFFICE ${roomCode}` : "A TINY PLACE TO HANG OUT"}
-          </p>
+          <p className="logo__sub">{roomCode ? `MEETING ${roomCode}` : "A TINY PLACE TO HANG OUT"}</p>
         </div>
 
         <div className="panel">
-          <p className="label">Your name</p>
+          <p className="label">First name</p>
           <input
             className="field"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="COLIN"
+            placeholder="TYPE YOUR FIRST NAME"
             maxLength={12}
             autoComplete="off"
             autoCapitalize="characters"
             spellCheck={false}
             enterKeyHint="go"
+            autoFocus
           />
-
-          <p className="label">Pick your bud</p>
-          <CharacterPicker value={character} onChange={setCharacter} />
 
           <button type="submit" className="btn btn--primary" disabled={!canSubmit || !ready}>
             {busy ? "Entering..." : action}

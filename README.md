@@ -3,10 +3,14 @@
 A tiny retro office where two friends can hang out — and a village outside it, for
 when the office gets old.
 
-Open the game, type a name, pick a bud, and you get a link. Send the link to a friend and
-you are both standing in the same little office — walking around, bumping into the copier,
-and talking in speech bubbles over your heads. That is the whole game, and it is meant to
-stay that way.
+One small office with one desk. Open the game and you get a link; send it to a friend and
+they type their first name to walk in as themselves. Colin ends up at the desk and
+everyone else in the chairs beside it, talking in speech bubbles over your heads. That is
+the whole game, and it is meant to stay that way.
+
+Nobody picks a character. You type your first name and a character is looked up in
+`src/game/cast.ts`, so the invite is "type who you are", not "choose an avatar". The cast
+is Colin, Michael, Alexis, Melanie and Tiffany; anyone else gets in as a guest.
 
 <!-- Built for phones first; works fine on a desktop browser too. -->
 
@@ -17,13 +21,42 @@ stay that way.
 - **Desktop** — WASD or the arrow keys.
 - **CHAT** opens the composer. What you send floats above your head for a few seconds
   (longer messages linger longer) and your friend sees it in real time.
-- **WAVE** and, for Colin, **LAPTOP** — emote buttons only appear for animations that
-  character actually has art for.
+- **WAVE**, **JUMP** and **LAPTOP** — emote buttons only appear for animations that
+  character actually has art for, so a character with no wave sheet simply has no button.
 - **LOG** shows recent messages, so nothing is lost once a bubble fades.
-- Walk into the office door to step outside on your own. Or say **"let's go outside"**
+- **PICK UP** appears when you are standing next to something you can lift. You then
+  carry it over your head until you put it down, and everyone sees you holding it.
+- Walk onto a chair to sit in it, or in behind the desk to sit at it.
+- Walk out through the doorway to step outside on your own. Or say **"let's go outside"**
   and the whole room goes with you; say **"back to work"** out there to march everyone
   back in. The cottage is the way back in too.
 - The office code in the top-left copies (or opens the share sheet for) the invite link.
+
+### Say the magic words
+
+Some things you type do more than float over your head. `src/game/chatMagic.ts` is the
+whole list and adding one is a single line.
+
+| Say | What happens |
+| --- | --- |
+| party time | The lights go down and disco lamps sweep the room |
+| lights out | The lights go off. Everyone becomes a glow in the dark |
+| party over | The lights come back on |
+| leave | Everybody is turned out of the office |
+| earthquake | The room shakes |
+| congrats | Confetti |
+| hi, bye | You wave |
+| standup, coffee, deploy | A banner, for the people who need to know |
+
+Moods stick until somebody changes them; bursts play out and end. Both reach everyone in
+the room, and nothing outside it — walking out of a party does not take the lighting with
+you.
+
+The disruptive ones are `exact: true`, meaning the whole message has to be the phrase.
+That distinction was earned: as substrings, "leave" ended the session every time somebody
+said they had to go, "raise" rained confetti on anyone raising a ticket, and "status" and
+"coffee" kept a banner on screen through an entire standup. Anything that interrupts
+other people has to be typed deliberately.
 
 ## Running it
 
@@ -62,7 +95,7 @@ src/game/
   render/               renderer, speech bubbles, name plates
   net/                  transport interface + Supabase and same-browser drivers
 tools/                  Python art pipeline (run only when the source art changes)
-art-source/             the original high-resolution character, furniture and village art
+art-source/             high-resolution character sheets, and the vendored art packs
 public/assets/          generated atlases, committed so the app needs no build step
 ```
 
@@ -78,9 +111,13 @@ uniform grid, no per-sprite scaling, and one GPU blit per frame regardless of ho
 on screen. The static floor, walls and wall-mounted props are pre-rendered into the room
 once at load, so a frame is one background blit plus the depth-sorted props and characters.
 
-Display scale is chosen from the viewport so roughly 260 world pixels are visible
-vertically — about 3x on a phone, which leaves the office comfortably larger than the
-screen and lets the camera follow you around it.
+Display scale is the larger of two demands. One asks to see roughly 260 world pixels
+vertically, which is what a big room like the village wants. A small room wants the
+opposite — zoom in far enough to fill the screen, or a one-room office ends up a postage
+stamp adrift in letterbox. Taking the max satisfies whichever applies: on a phone the
+office comes out at 3x, on a desktop 4-6x. On a wide screen the play surface is held to a
+phone-shaped column in the middle, because one small office is a portrait scene and
+stretching it across a monitor only buys more empty carpet.
 
 ### Characters
 
@@ -99,6 +136,37 @@ construction, so they are written as indexed PNGs — roughly a third the size o
 no visible change. The furniture atlas keeps its original anti-aliased edges and is left
 as RGBA.
 
+**Adding one.** Drop the five sheets in `art-source/characters/`, run
+`python3 tools/build_sprites.py`, then add a line to `CAST` in `src/game/cast.ts` tying a
+name to it. Nothing else needs to change — the entry screen, the name plate and the seat
+assignment all read from that list. A name that is not on the list still gets in, as a
+visitor on the default sprite, so an invite never dead-ends on a typo.
+
+Which seat you arrive in lives on that list too, and typing "Colin" is what puts someone
+at the desk. There is no authentication behind it; for friends sharing a link that is the
+right amount of security, and it is worth knowing rather than assuming otherwise.
+
+Sheets do not all come back from the generator standing on the floor of their 640px box -
+some sit 15-20px high, which at 1/16 scale leaves a character hovering above their own
+shadow. The builder measures each character once and drops every one of their frames by
+the same amount, which closes the gap without disturbing the shared anchor.
+
+### Picking things up
+
+A prop marked `takeable` can be lifted. What makes this simple is that the entire world
+state lives in one replicated number: `PlayerState.carrying`, an index into the room's
+prop list. A takeable prop is drawn unless somebody standing in the room is carrying it,
+and everyone already receives everyone's carrying value on the movement heartbeat.
+
+That means there is no take/drop event to miss, nothing to replay for a late joiner, and
+no way for two clients to disagree about what is on the floor. It also means a dropped
+item returns to exactly where it started, which is the one thing given up for it — you
+can carry the photocopier around the office, but you cannot leave it somewhere else.
+
+Two people reaching for the same thing on the same tick both come away holding it for an
+instant; lowest player id keeps it, which both clients work out independently without
+having to agree on a clock.
+
 ### The room
 
 Rooms are data (`src/game/world/office.ts`). A room lists props by bottom-centre anchor,
@@ -115,7 +183,26 @@ interactions (sit in a chair, stand at the copier, wish at the well) — nothing
 
 A room declares which atlas its art comes from, so the office and the village keep
 separate sprite sheets. Ground is a list of tile variants picked per tile by a hash,
-which is what stops sixteen crops of grass falling into a visible repeat.
+which is what stops sixteen crops of grass falling into a visible repeat; a floor zone
+can instead name a nine-slice set (`nine: "rug"`) when it wants a visible hem, which a
+tile swap cannot give you.
+
+### Sitting down, without any sitting art
+
+Nobody has a sitting animation and none is needed. In a front-on perspective, furniture
+drawn over a character's legs reads as sitting behind it — so a seat is just a spot whose
+y sorts *before* the furniture's, plus a facing. The desk crosses the manager at chest
+height; the sofa crosses a visitor at the waist.
+
+`seats` in the room data says who lands where: the manager gets the desk, everyone else
+the sofa beside it, so a meeting looks like a meeting the moment both people are in. The
+sofas are deliberately not solid, which makes this something you can also do on purpose —
+walk onto a sofa and you are sitting on it.
+
+The office is sized against a portrait phone rather than for looks: 144x240 world px,
+which is very nearly one screenful, so the camera only ever drifts a few pixels and
+nothing important is ever off-frame. With two people in the room the camera frames the
+group rather than following one person, or you would be talking to someone off screen.
 
 ### Going places
 
@@ -182,8 +269,10 @@ npm run assets
 ```
 
 - `tools/build_sprites.py` — character sheets to 40x40 atlases
-- `tools/build_props.py` — packs the furniture, and draws the floor, wall, partition,
-  window and door tiles the furniture pack does not include
+- `tools/build_office.py` — the office atlas: named pieces cut out of LimeZu's Modern
+  Office pack, wallpaper and floor tiles sliced off its room builder, plus the nine-slice
+  rug the pack does not include
+- `tools/build_props.py` — the previous furniture atlas, kept for reference
 - `tools/build_village.py` — the outdoor atlas: props scaled against the 40px character,
   desaturated to sit beside the office, and grass cut as 16 crops so it does not repeat
 - `tools/build_font.py` — rasterises the two bitmap fonts
@@ -205,5 +294,10 @@ Two notes on the outdoor art, both learned the hard way:
 
 ## Credits
 
-Characters, office furniture and village art are the project's own, in `art-source/`.
+Characters are the project's own, in `art-source/characters/`.
+
+The office is built from LimeZu's **Modern Office - Revamped**, vendored under
+`art-source/modern-office/` with its licence: commercial use is permitted, redistributing
+the art itself is not. The village pack is under `art-source/village/`.
+
 The bitmap fonts are rasterised from Liberation Sans Bold (SIL Open Font License 1.1).

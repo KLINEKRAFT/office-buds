@@ -30,6 +30,18 @@ export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pos
   if (player.emote && meta.clips[player.emote]) {
     clipName = player.emote;
     time = player.emoteTime;
+  } else if (player.carrying >= 0 && !player.moving && meta.clips.lift) {
+    // Standing still holding something: hold the last frame of the lift, which ends with
+    // both arms overhead - exactly where the item is drawn. Walking falls through to the
+    // ordinary walk cycle, because there is no carry-walk art and arms-up-while-striding
+    // looks worse than arms-down-while-carrying.
+    const lift = meta.clips.lift;
+    return {
+      sx: ((lift.start + lift.count - 1) % meta.cols) * FRAME,
+      sy: Math.floor((lift.start + lift.count - 1) / meta.cols) * FRAME,
+      flip,
+      bob: 0,
+    };
   } else if (player.moving) {
     clipName = `walk_${suffix(player.dir)}`;
     time = player.animTime;

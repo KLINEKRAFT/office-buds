@@ -1,159 +1,112 @@
-import { TILE } from "../config";
-import type { PropDef, RoomDef } from "./types";
+import type { RoomDef } from "./types";
 
 /**
- * The one room in version 1: 448x392 world px, with a 40px wall band along the top.
+ * The office. One room, one desk, one place to sit and talk.
  *
- * Reading left to right: a strip of cabinets against the left wall, a six-desk cubicle
- * farm, a vertical aisle, a middle column holding the copier bay, a supply nook and the
- * conference table, another aisle, then the boss's corner, break area and lounge down
- * the right. A wide corridor runs along the top wall past the door, and another across
- * the bottom, so there are always at least two ways around any cluster.
+ * 160x240 world px. Both numbers are chosen against a portrait phone rather than picked
+ * for looks: at the scale this game runs, a phone shows roughly 130x220 world px, so a
+ * room this size is almost entirely on screen at once and the camera only ever drifts a
+ * few pixels. Nothing important is ever off-frame.
  *
- * Clusters sit ~30px apart, a little over two body widths - loose enough never to feel
- * like a maze, tight enough that two people wandering keep running into each other,
- * which is the entire point of the room. The perimeter is lined with furniture so the
- * floor reads as an enclosed office rather than props adrift on carpet.
+ * Laid out like a real one. Desk against the back wall so whoever sits there looks down
+ * the room at anyone coming in; doorway top-right, so nobody ever arrives from behind
+ * the desk; visitor chairs on a rug just to the right and a little nearer the viewer;
+ * storage down the left wall; the coffee and water in the far corner, which is where
+ * people stand around in every office ever built.
  *
- * Props are placed by bottom-centre. Anything resting on a surface gets a `bias` so it
- * depth-sorts after the furniture it sits on.
+ * ART. LimeZu's "Modern Office - Revamped" (art-source/modern-office/). It is drawn from
+ * a higher angle than the characters are - you see the top of a desk but you look a
+ * person in the eye - so furniture cannot cover a character to the chest the way a
+ * front-elevation desk would. What sells sitting here is the arrangement rather than the
+ * occlusion: chair behind, desk and monitor in front, and the character between them.
+ * That is exactly how the pack's own example rooms read, and it works.
  */
 
-const WALL = 40;
-
-/** A desk, its cubicle wall and its chair, as one repeated unit. */
-function cubicle(
-  x: number,
-  y: number,
-  desk: "desk" | "desk_2",
-  chair: "chair" | "chair_2",
-  flip = false,
-): PropDef[] {
-  return [
-    { sprite: "partition", x, y: y - 30, solid: true },
-    { sprite: desk, x, y, solid: true, flip },
-    { sprite: chair, x, y: y + 12 },
-  ];
-}
+const WALL = 32; // one wallpaper band, cap and skirting included
+const W = 10; // tiles across -> 160px
+const H = 13; // tiles deep   -> 208px of floor, 240 with the wall band
 
 export const office: RoomDef = {
   id: "office",
   name: "THE OFFICE",
   atlas: "office",
-  widthTiles: 28,
-  heightTiles: 22,
+  widthTiles: W,
+  heightTiles: H,
   wallHeight: WALL,
-  groundTiles: ["floor_a", "floor_b"],
+  wallTile: "wall_grey",
+  // The doorway, top right. Two tiles of unlit opening rather than a door sprite.
+  wallGaps: [{ tx: 7, tw: 2 }],
+  groundTiles: ["floor_grey_a", "floor_grey_b"],
 
-  // Warm carpet through the break area and lounge, so the right-hand side of the floor
-  // reads as somewhere you hang out rather than somewhere you work.
   floorZones: [
-    // Break area + lounge, down the right.
-    { tx: 20, ty: 9, tw: 8, th: 13, tiles: ["floor_warm_a", "floor_warm_b"] },
-    // A separate patch under the conference table, with a strip of cool carpet left
-    // between them so the two zones read as two rooms rather than one L-shape.
-    { tx: 12, ty: 13, tw: 7, th: 6, tiles: ["floor_warm_a", "floor_warm_b"] },
+    // One floor, one rug. An earlier pass zoned the desk end in a second carpet and it
+    // read as a rectangle someone had forgotten to finish rather than as a different
+    // floor - a hemmed rug says "this is a place" and a hard-edged tile swap does not.
+    { tx: 4, ty: 5, tw: 4, th: 3, nine: "rug" },
   ],
 
   props: [
-    // ---- wall band ----------------------------------------------------------
-    { sprite: "window", x: 64, y: 32, layer: "wall" },
-    { sprite: "window", x: 132, y: 32, layer: "wall" },
-    { sprite: "wall_graph", x: 178, y: 32, layer: "wall" },
-    { sprite: "wall_note", x: 198, y: 32, layer: "wall" },
-    { sprite: "wall_note_2", x: 218, y: 30, layer: "wall" },
-    { sprite: "board", x: 248, y: 30, layer: "wall" },
-    { sprite: "door", x: 300, y: 40, layer: "wall" },
-    { sprite: "wall_clock", x: 338, y: 30, layer: "wall" },
-    { sprite: "wall_shelf", x: 368, y: 26, layer: "wall" },
-    { sprite: "mirror", x: 396, y: 30, layer: "wall" },
-    { sprite: "window", x: 428, y: 32, layer: "wall" },
+    // ---- the wall you look at ------------------------------------------------------
+    { sprite: "whiteboard", x: 36, y: 28, layer: "wall" },
+    { sprite: "photo_group", x: 74, y: 26, layer: "wall" },
+    { sprite: "certificate", x: 100, y: 26, layer: "wall" },
 
-    // ---- left wall: storage strip -------------------------------------------
-    { sprite: "big_plant", x: 18, y: 92, solid: true },
-    { sprite: "filing_cabinet_tall", x: 16, y: 152, solid: true },
-    { sprite: "wide_filing_cabinet", x: 20, y: 212, solid: true },
-    { sprite: "bookshelf", x: 16, y: 264, solid: true },
-    { sprite: "bin", x: 16, y: 300 },
-    { sprite: "big_plant", x: 18, y: 352, solid: true },
+    // ---- the desk ------------------------------------------------------------------
+    // Chair behind, desk in front, screen and keyboard on top. The chair anchors above
+    // the seat so it draws behind whoever is sitting; the desk anchors below so it draws
+    // in front of them. The desktop clutter needs a bias PAST the desk's own anchor or
+    // it sorts behind the desk and vanishes underneath it.
+    { sprite: "chair_office", x: 40, y: 74 },
+    { sprite: "desk", x: 40, y: 96, solid: true, collider: { x: 26, y: 90, w: 28, h: 6 } },
+    { sprite: "monitor", x: 30, y: 90, bias: 7 },
+    { sprite: "keyboard", x: 46, y: 94, bias: 5, takeable: true },
+    { sprite: "plant_tall", x: 12, y: 86, takeable: true },
 
-    // ---- cubicle farm --------------------------------------------------------
-    ...cubicle(70, 142, "desk", "chair"),
-    ...cubicle(134, 142, "desk_2", "chair_2"),
-    ...cubicle(70, 240, "desk_2", "chair_2", true),
-    ...cubicle(134, 240, "desk", "chair"),
-    ...cubicle(70, 338, "desk", "chair_2"),
-    ...cubicle(134, 338, "desk_2", "chair"),
+    // ---- left wall: storage, and the printer nobody wants to sit next to ------------
+    { sprite: "locker_mesh", x: 14, y: 132, solid: true },
+    { sprite: "shelf_mesh", x: 22, y: 168, solid: true },
+    { sprite: "copier", x: 16, y: 206, solid: true },
+    { sprite: "printer", x: 48, y: 210, solid: true },
+    { sprite: "plant_bushy", x: 14, y: 234, takeable: true },
 
-    // ---- middle: copier bay ---------------------------------------------------
-    { sprite: "printer_furniture", x: 196, y: 130, solid: true },
-    { sprite: "papers", x: 196, y: 118, bias: 20 },
-    { sprite: "big_office_printer", x: 232, y: 132, solid: true },
-    { sprite: "filing_cabinet_open", x: 264, y: 130, solid: true },
-    { sprite: "bookshelf", x: 288, y: 126, solid: true },
+    // ---- where the meeting happens -------------------------------------------------
+    // Not solid on purpose: walking onto a chair is how you sit down.
+    { sprite: "side_table", x: 100, y: 140, solid: true },
+    { sprite: "tub_chair_grey", x: 80, y: 124 },
+    { sprite: "tub_chair_tan", x: 120, y: 128 },
+    { sprite: "plant_small", x: 146, y: 112, takeable: true },
 
-    // ---- middle: supply nook ---------------------------------------------------
-    { sprite: "small_table", x: 196, y: 192, solid: true },
-    { sprite: "folders", x: 196, y: 186, bias: 20 },
-    { sprite: "filing_cabinet_small", x: 220, y: 192, solid: true },
-    { sprite: "small_plant", x: 246, y: 190 },
-    { sprite: "bin", x: 272, y: 194 },
-
-    // ---- middle: conference table ------------------------------------------------
-    { sprite: "chair", x: 216, y: 264 },
-    { sprite: "chair", x: 264, y: 264, flip: true },
-    { sprite: "big_round_table", x: 240, y: 290, solid: true },
-    { sprite: "chair_2", x: 216, y: 306 },
-    { sprite: "chair_2", x: 264, y: 306, flip: true },
-
-    // ---- right: boss's corner --------------------------------------------------
-    { sprite: "tall_bookshelf", x: 340, y: 140, solid: true },
-    { sprite: "boss_chair", x: 372, y: 124 },
-    { sprite: "boss_desk", x: 372, y: 140, solid: true },
-    { sprite: "books", x: 364, y: 132, bias: 20 },
-    { sprite: "big_filing_cabinet", x: 404, y: 138, solid: true },
-    { sprite: "small_plant", x: 428, y: 136 },
-
-    // ---- right: break area ------------------------------------------------------
-    { sprite: "small_table", x: 346, y: 206, solid: true },
-    { sprite: "coffee_machine", x: 346, y: 198, bias: 20 },
-    { sprite: "water_dispenser", x: 372, y: 206, solid: true },
-    { sprite: "vending_machine", x: 402, y: 208, solid: true },
-    { sprite: "bin", x: 428, y: 202 },
-
-    // ---- right: lounge -------------------------------------------------------------
-    { sprite: "big_plant", x: 432, y: 254, solid: true },
-    { sprite: "big_sofa", x: 390, y: 285, solid: true },
-    { sprite: "small_sofa", x: 348, y: 296, solid: true },
-    { sprite: "big_sofa_2", x: 430, y: 296, solid: true, flip: true },
-    { sprite: "small_table", x: 390, y: 302, solid: true },
-
-    // ---- bottom edge ----------------------------------------------------------------
-    { sprite: "big_plant", x: 348, y: 374, solid: true },
-    { sprite: "filing_cabinet_small", x: 400, y: 372, solid: true },
-    { sprite: "small_plant", x: 428, y: 374 },
-    { sprite: "bin", x: 292, y: 366 },
-    { sprite: "small_plant", x: 176, y: 372 },
+    // ---- the far corner, where everyone stands around ------------------------------
+    { sprite: "counter_white", x: 124, y: 186, solid: true },
+    { sprite: "coffee_station", x: 116, y: 184, bias: 6 },
+    { sprite: "water_cooler", x: 148, y: 212, solid: true },
+    { sprite: "board_stand", x: 88, y: 206, takeable: true },
   ],
 
-  // No blocker across the doorway any more - walking into it is how you get outside.
+  /**
+   * Seats. Each sits a little above its furniture's anchor so the furniture sorts after
+   * the character and covers their feet - see the note at the top of this file.
+   *   desk       is drawn from 77, chair from 53, so sitting at 92 puts the character
+   *              between the two with the monitor at their chest.
+   *   tub chairs are 18px tall, so a seat 4px above the anchor tucks the legs in.
+   */
+  seats: [
+    { id: "desk", x: 40, y: 92, dir: "down", kind: "desk" },
+    { id: "chair_left", x: 80, y: 120, dir: "down", kind: "sofa" },
+    { id: "chair_right", x: 120, y: 124, dir: "down", kind: "sofa" },
+  ],
 
-  // Both spawns are in the top corridor just inside the door, so arriving feels like
-  // walking into the office - and so two friends land within sight of each other.
-  // Offset to either side of the doorway on purpose. Spawning directly under it meant
-  // the very first press of "up" walked you straight back out and away from your friend.
   spawns: [
-    { x: 250, y: 72 },
-    { x: 344, y: 80 },
-    // Index 2: where you land coming back from outside. Deliberately clear of the exit
-    // rect below, or you would bounce straight back out again on arrival.
-    { x: 300, y: 68 },
+    { x: 74, y: 176 },
+    { x: 54, y: 160 },
+    // Index 2: just inside the doorway, for coming back in from outside.
+    { x: 120, y: 58 },
   ],
   joinSpawns: 2,
 
-  // Walking into the doorway steps outside - only you. Saying it takes everyone.
-  // Reaches up to the wall base so walking into the door actually lands inside it.
-  exits: [{ rect: { x: 292, y: WALL, w: 18, h: 10 }, to: "outside", spawn: 0, label: "GO OUTSIDE" }],
+  exits: [
+    { rect: { x: 112, y: WALL, w: 32, h: 10 }, to: "outside", spawn: 0, label: "GO OUTSIDE" },
+  ],
 
   sayTriggers: [
     {
@@ -164,15 +117,9 @@ export const office: RoomDef = {
     },
   ],
 
-  // Reserved for the small interactions in a later pass - nothing reads these yet.
   zones: [
-    { id: "coffee", rect: { x: 334, y: 206, w: 26, h: 22 }, label: "COFFEE", action: "drink" },
-    { id: "cooler", rect: { x: 362, y: 206, w: 22, h: 22 }, label: "WATER COOLER", action: "drink" },
-    { id: "vending", rect: { x: 390, y: 208, w: 24, h: 22 }, label: "VENDING MACHINE", action: "buy" },
-    { id: "copier", rect: { x: 214, y: 132, w: 38, h: 22 }, label: "COPIER", action: "copy" },
-    { id: "table", rect: { x: 210, y: 264, w: 62, h: 46 }, label: "CONFERENCE TABLE", action: "sit" },
-    { id: "lounge", rect: { x: 370, y: 285, w: 42, h: 20 }, label: "SOFA", action: "sit" },
+    { id: "desk", rect: { x: 24, y: 84, w: 32, h: 16 }, label: "THE DESK", action: "sit" },
+    { id: "chairs", rect: { x: 68, y: 112, w: 60, h: 20 }, label: "SIT DOWN", action: "sit" },
+    { id: "coffee", rect: { x: 108, y: 172, w: 32, h: 18 }, label: "COFFEE", action: "drink" },
   ],
 };
-
-export const OFFICE_WIDTH = 28 * TILE;

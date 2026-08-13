@@ -72,6 +72,13 @@ CHARACTERS: dict[str, dict] = {
             # Colin gets his laptop out. Held on the last frame rather than looping, so
             # he stays sitting there with it open until he moves.
             Clip("laptop", "Colin_laptop_animation_sheet.png", tuple(range(8)), 7, loop=False),
+            # Bends, grabs, straightens up again - the deepest crouch is frame 5, held a
+            # beat so the grab reads rather than flicking past.
+            Clip("pickup", "Colin_pickup.png", (0, 1, 2, 3, 4, 5, 5, 6, 7), 11, loop=False),
+            # Ends with both arms raised overhead. Held, so he stands there holding it up
+            # until he moves - the pose an item gets drawn into later.
+            Clip("lift", "Colin_lift.png", tuple(range(8)), 9, loop=False),
+            Clip("jump", "Colin_front_jump_sheet.png", tuple(range(8)), 12, loop=False),
         ],
     },
     "michael": {
@@ -87,6 +94,22 @@ CHARACTERS: dict[str, dict] = {
         ],
     },
 }
+
+# The later characters came with a fuller set than Colin and Michael did - dedicated
+# standing poses for the side and back views, rather than the steadiest frame of a walk
+# cycle reused. Same six sheets each, so they are generated from one template.
+for _name in ("Alexis", "Melanie", "Tiffany"):
+    CHARACTERS[_name.lower()] = {
+        "label": _name.upper(),
+        "clips": [
+            Clip("idle_down", f"{_name}_idle.png", tuple(range(8)), 7),
+            Clip("walk_down", f"{_name}_walk_down.png", tuple(range(8)), 11),
+            Clip("walk_side", f"{_name}_walk_right.png", tuple(range(8)), 11),
+            Clip("walk_up", f"{_name}_walk_up.png", tuple(range(8)), 11),
+            Clip("idle_side", f"{_name}_idle_right.png", tuple(range(8)), 7),
+            Clip("idle_up", f"{_name}_idle_up.png", tuple(range(8)), 7),
+        ],
+    }
 
 
 def load_sheet(name: str) -> list[Image.Image]:
@@ -116,6 +139,35 @@ def downscale(frame: Image.Image) -> Image.Image:
     return Image.merge("RGBA", (*rgb.split(), out.split()[3]))
 
 
+def ground(frame: Image.Image, drop: int) -> Image.Image:
+    """Shifts a frame down by `drop` px, keeping the box the same size."""
+    out = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+    out.paste(frame, (0, drop))
+    return out
+
+
+def foot_offset(sheets: dict[str, list[Image.Image]]) -> int:
+    """
+    How far to push a character down so their feet land on the bottom edge.
+
+    Sheets do not all come back from the generator with the character standing on the
+    floor of the box - some sit 15-20px high, which at 1/16 scale leaves the character
+    hovering a pixel above their own shadow. The offset is computed once per CHARACTER
+    and applied to every frame, never per sheet or per frame: a single shared shift
+    removes the gap while preserving the relative motion that stops the sprite jittering
+    when it switches clips.
+    """
+    lowest = 0
+    for frames in sheets.values():
+        for f in frames:
+            a = np.array(f)[:, :, 3]
+            ys, _ = np.where(a > 16)
+            if len(ys):
+                lowest = max(lowest, int(ys.max()))
+    size = next(iter(sheets.values()))[0].size[1]
+    return max(0, size - 1 - lowest)
+
+
 def content_box(frames: list[Image.Image]) -> dict:
     """Union of every frame's opaque pixels - the renderer uses this for shadows."""
     x0, y0, x1, y1 = FRAME, FRAME, 0, 0
@@ -137,6 +189,14 @@ def build_character(key: str, spec: dict) -> dict:
     for clip in spec["clips"]:
         if clip.sheet not in sheets:
             sheets[clip.sheet] = load_sheet(clip.sheet)
+
+    drop = foot_offset(sheets)
+    if drop:
+        print(f"  {key}: standing {drop}px high, dropping to the floor")
+        for name, frames in sheets.items():
+            sheets[name] = [ground(f, drop) for f in frames]
+
+    for clip in spec["clips"]:
         src = sheets[clip.sheet]
         start = len(tiles)
         for idx in clip.frames:

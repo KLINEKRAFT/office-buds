@@ -1,5 +1,5 @@
 import type { Assets, SpriteRect } from "../core/assets";
-import { TILE } from "../config";
+import { PALETTE, TILE } from "../config";
 import type { Rect } from "../types";
 import type { AtlasId, PropDef, RoomDef } from "./types";
 
@@ -11,6 +11,8 @@ export interface DrawProp {
   flip: boolean;
   /** Depth sort key. */
   sortY: number;
+  /** Index in the room's prop list if this one can be picked up, else -1. */
+  propIndex: number;
 }
 
 export interface BuiltRoom {
@@ -20,6 +22,8 @@ export interface BuiltRoom {
   wallHeight: number;
   /** The atlas this room's props are drawn from. */
   atlas: HTMLImageElement;
+  /** Sprite table for that atlas, so a carried prop can be looked up by name. */
+  sprites: Record<string, SpriteRect>;
   /** Pre-rendered ground, walls and wall-mounted props. Blitted once per frame. */
   background: HTMLCanvasElement;
   /** Depth-sorted props that characters can walk in front of and behind. */
@@ -97,11 +101,18 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
   const colliders: Rect[] = [];
 
   for (const zone of def.floorZones ?? []) {
-    const tiles = zone.tiles.map(get);
-    for (let ty = zone.ty; ty < zone.ty + zone.th; ty++) {
-      for (let tx = zone.tx; tx < zone.tx + zone.tw; tx++) {
+    const tiles = (zone.tiles ?? []).map(get);
+    const lastX = zone.tx + zone.tw - 1;
+    const lastY = zone.ty + zone.th - 1;
+    for (let ty = zone.ty; ty <= lastY; ty++) {
+      for (let tx = zone.tx; tx <= lastX; tx++) {
         if (tx < 0 || ty < 0 || tx >= def.widthTiles || ty >= def.heightTiles) continue;
-        const t = tiles[tileHash(tx + 977, ty + 311) % tiles.length];
+        const t = zone.nine
+          ? get(
+              `${zone.nine}_${ty === zone.ty ? "t" : ty === lastY ? "b" : "m"}` +
+                `${tx === zone.tx ? "l" : tx === lastX ? "r" : "c"}`,
+            )
+          : tiles[tileHash(tx + 977, ty + 311) % tiles.length];
         blit(t, tx * TILE, def.wallHeight + ty * TILE);
       }
     }
@@ -116,21 +127,37 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
   }
 
   // ---- wall band (indoor rooms only) --------------------------------------
+  // The wallpaper carries its own cap and skirting, so the band is one sprite tiled
+  // sideways rather than three strips stacked. Doorways are cut as gaps: the pack has no
+  // door sprite, and from this angle an unlit opening in the wall reads as a doorway
+  // more honestly than a door drawn flat against it would.
   if (def.wallHeight > 0) {
-    const wall = get("wall");
-    const wallCap = get("wall_cap");
-    const baseboard = get("baseboard");
-    for (let y = 0; y < def.wallHeight; y += TILE) {
-      for (let x = 0; x < width; x += TILE) blit(wall, x, y);
-    }
-    for (let x = 0; x < width; x += TILE) blit(wallCap, x, 0);
+    const wall = get(def.wallTile ?? "wall");
     for (let x = 0; x < width; x += TILE) {
-      blit(baseboard, x, def.wallHeight - baseboard.h);
+      for (let y = 0; y < def.wallHeight; y += wall.h) blit(wall, x, y);
+    }
+    // The cap stays: an opening that runs to the ceiling reads as a missing wall, one
+    // with a lintel over it reads as a door.
+    const LINTEL = 7;
+    for (const gap of def.wallGaps ?? []) {
+      const gx = gap.tx * TILE;
+      const gw = gap.tw * TILE;
+      ctx.fillStyle = PALETTE.doorway;
+      ctx.fillRect(gx, LINTEL, gw, def.wallHeight - LINTEL);
+      ctx.fillStyle = PALETTE.doorwayLip;
+      ctx.fillRect(gx, LINTEL, gw, 1);
+      ctx.fillRect(gx, LINTEL, 1, def.wallHeight - LINTEL);
+      ctx.fillRect(gx + gw - 1, LINTEL, 1, def.wallHeight - LINTEL);
+      ctx.fillRect(gx, def.wallHeight - 1, gw, 1);
     }
   }
 
   // ---- props ---------------------------------------------------------------
   const floorProps: DrawProp[] = [];
+  // Keep each prop's index in the room's own list: it is the id a carried item is
+  // referred to by over the network, so it has to survive the layer sort below.
+  const indexOf = new Map<PropDef, number>();
+  def.props.forEach((p, i) => indexOf.set(p, i));
   const ordered = [...def.props].sort((a, b) => layerRank(a) - layerRank(b));
 
   for (const p of ordered) {
@@ -147,10 +174,13 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
         y: drawY,
         flip: p.flip ?? false,
         sortY: p.y + (p.bias ?? 0),
+        propIndex: p.takeable ? (indexOf.get(p) ?? -1) : -1,
       });
     }
 
-    if (p.solid) colliders.push(p.collider ?? autoCollider(p, rect));
+    // A takeable prop never blocks: it would leave an invisible wall behind once
+    // somebody picked it up.
+    if (p.solid && !p.takeable) colliders.push(p.collider ?? autoCollider(p, rect));
   }
 
   floorProps.sort((a, b) => a.sortY - b.sortY);
@@ -169,6 +199,7 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
     height,
     wallHeight: def.wallHeight,
     atlas: source.image,
+    sprites: source.sprites,
     background,
     floorProps,
     colliders,

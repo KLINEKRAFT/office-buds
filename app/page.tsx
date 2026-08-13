@@ -20,7 +20,7 @@ export default function Home() {
 
   return (
     <EntryScreen
-      action="Create office"
+      action="Open your office"
       busy={busy}
       onSubmit={() => {
         setBusy(true);

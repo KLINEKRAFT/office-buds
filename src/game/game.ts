@@ -8,8 +8,10 @@ import {
   MAX_MESSAGE_LEN,
   NET_IDLE_RESEND_MS,
   PEER_TIMEOUT_MS,
+  REACH_DIST,
   REMOTE_SMOOTHING,
   REMOTE_SNAP_DIST,
+  TARGET_VIEW_H,
   TRANSITION_MS,
   WALK_SPEED,
 } from "./config";
@@ -20,10 +22,13 @@ import { Camera } from "./core/camera";
 import { Input } from "./core/input";
 import { Renderer } from "./render/renderer";
 import { createNet, type Net, type NetStatus } from "./net";
-import type { Bubble, ChatMessage, CharacterId, Dir, Player, PlayerState } from "./types";
+import type { SeatKind } from "./cast";
+import type { Bubble, ChatMessage, CharacterId, Dir, Player, PlayerState, Vec2 } from "./types";
 import { buildRoom, type BuiltRoom } from "./world/build";
 import { bodyRect, findFreeSpawn, moveWithCollision } from "./world/collision";
 import { DEFAULT_ROOM, getRoom, matchSayTrigger } from "./world";
+import { matchChatMagic } from "./chatMagic";
+import { BURST_SECONDS, isBurst, isMood, type Burst, type Mood } from "./effects";
 
 export interface GameOptions {
   canvas: HTMLCanvasElement;
@@ -31,6 +36,8 @@ export interface GameOptions {
   roomCode: string;
   name: string;
   character: CharacterId;
+  /** Decides where you land: Colin gets the desk, everyone else the sofa. */
+  seat: SeatKind;
   startRoom?: string;
   onChat(message: ChatMessage): void;
   onStatus(status: NetStatus, detail?: string): void;
@@ -39,6 +46,8 @@ export interface GameOptions {
   onPlace(roomName: string): void;
   /** A short banner, e.g. "COLIN TOOK EVERYONE OUTSIDE". */
   onAnnounce(text: string): void;
+  /** Somebody cleared the room. The shell should leave the office entirely. */
+  onEvicted(byName: string): void;
 }
 
 function uid(): string {
@@ -47,6 +56,23 @@ function uid(): string {
 
 function bubbleDuration(text: string): number {
   return Math.min(BUBBLE_MAX_MS, BUBBLE_MIN_MS + text.length * BUBBLE_PER_CHAR_MS);
+}
+
+/**
+ * Where somebody starts. Rooms with assigned seating put Colin behind the desk and
+ * everyone else on the sofa, so arriving already looks like a meeting; rooms without
+ * seats fall back to their ordinary join spawns.
+ */
+function startPlace(room: BuiltRoom, kind: SeatKind): Vec2 & { dir: Dir } {
+  // First seat of the right kind, not a random one: Colin belongs at the desk and a
+  // guest belongs on the sofa beside it. findFreeSpawn nudges the rare second guest off
+  // to the spare chair rather than standing them inside somebody.
+  const seat = (room.def.seats ?? []).find((s) => s.kind === kind);
+  if (seat) return { x: seat.x, y: seat.y, dir: seat.dir };
+  const joinable = room.def.spawns.slice(0, room.def.joinSpawns ?? room.def.spawns.length);
+  const spawn = joinable[Math.floor(Math.random() * joinable.length)] ??
+    { x: room.width / 2, y: room.height / 2 };
+  return { x: spawn.x, y: spawn.y, dir: "down" };
 }
 
 function overlaps(a: { x: number; y: number; w: number; h: number }, b: typeof a): boolean {
@@ -84,6 +110,11 @@ export class Game {
    */
   private exitCooldown = 0.9;
 
+  /** Lights on, party, or off. Set by anyone, seen by everyone. */
+  private mood: Mood = "normal";
+  /** One-shot effect and how long it has been running, or null. */
+  private burst: { kind: Burst; time: number } | null = null;
+
   private constructor(
     private readonly opts: GameOptions,
     private readonly assets: Assets,
@@ -91,12 +122,8 @@ export class Game {
   ) {
     this.room = room;
     const id = uid();
-    const joinable = room.def.spawns.slice(0, room.def.joinSpawns ?? room.def.spawns.length);
-    const spawn = joinable[Math.floor(Math.random() * joinable.length)] ?? {
-      x: room.width / 2,
-      y: room.height / 2,
-    };
-    const free = findFreeSpawn(room, spawn.x, spawn.y);
+    const start = startPlace(room, opts.seat);
+    const free = findFreeSpawn(room, start.x, start.y);
 
     this.local = {
       id,
@@ -106,10 +133,11 @@ export class Game {
       y: free.y,
       renderX: free.x,
       renderY: free.y,
-      dir: "down",
+      dir: start.dir,
       moving: false,
       emote: "",
       room: room.def.id,
+      carrying: -1,
       animTime: 0,
       emoteTime: 0,
       bubble: null,
@@ -119,6 +147,7 @@ export class Game {
 
     this.camera = new Camera(room.width, room.height);
     this.renderer = new Renderer(opts.canvas, assets);
+    this.renderer.targetViewH = room.def.targetViewH ?? this.renderer.targetViewH;
     this.net = createNet(opts.roomCode, { id, name: opts.name, character: opts.character });
   }
 
@@ -171,6 +200,7 @@ export class Game {
           moving: false,
           emote: "",
           room: this.local.room,
+          carrying: -1,
           animTime: 0,
           emoteTime: 0,
           bubble: null,
@@ -192,6 +222,7 @@ export class Game {
         p.dir = state.dir;
         p.moving = state.moving;
         p.room = state.room;
+        p.carrying = state.carrying;
         p.lastSeen = Date.now();
         if (state.emote && state.emote !== p.emote) {
           p.emote = state.emote;
@@ -206,9 +237,30 @@ export class Game {
         const p = this.players.get(id);
         if (!p) return;
         this.showBubble(p, text);
+        // Run the same magic locally for a remote speaker. The emote is derived rather
+        // than sent, so it cannot arrive out of order with the message that caused it.
+        if (p.room === this.local.room) {
+          const magic = matchChatMagic(text, p.character);
+          if (magic?.emote && this.assets.characters[p.character]?.meta.clips[magic.emote]) {
+            p.emote = magic.emote;
+            p.emoteTime = 0;
+          }
+          // The announce is derived locally; the EFFECT is not - the speaker broadcasts
+          // that themselves, or every listener would rebroadcast it in a loop.
+          if (magic?.announce) {
+            this.opts.onAnnounce(magic.announce.replace("{name}", p.name));
+          }
+        }
         // Only chime for people you are actually standing with.
         if (p.room === this.local.room) this.audio.receiveMessage();
         this.opts.onChat({ id: uid(), playerId: id, name: p.name, text, at, own: false });
+      },
+      onEffect: (id, effect) => {
+        const p = this.players.get(id);
+        // Effects belong to a room, so somebody partying outside does not black out the
+        // office. A player we have not met yet is ignored rather than trusted.
+        if (!p || p.room !== this.local.room) return;
+        this.applyEffect(effect, p.name);
       },
       onGo: (id, room, spawn, announce) => {
         const p = this.players.get(id);
@@ -218,6 +270,32 @@ export class Game {
         this.beginTransition(room, spawn);
       },
     });
+  }
+
+  /**
+   * Runs an effect locally. Called both for our own and for a peer's, so there is one
+   * code path and no chance of the two drifting apart.
+   */
+  private applyEffect(effect: string, byName: string): void {
+    if (effect === "leave") {
+      this.opts.onEvicted(byName);
+      return;
+    }
+    if (isMood(effect)) {
+      this.mood = effect;
+      return;
+    }
+    if (isBurst(effect)) {
+      this.burst = { kind: effect, time: 0 };
+      if (effect === "shake") this.audio.leave();
+      else this.audio.join();
+    }
+  }
+
+  /** Sets an effect off for everyone, including us. */
+  private fireEffect(effect: string, byName: string): void {
+    this.net.sendEffect(effect);
+    this.applyEffect(effect, byName);
   }
 
   private reportPeers(): void {
@@ -232,8 +310,9 @@ export class Game {
     const rect = this.opts.surface.getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
-    this.renderer.resize(w, h, this.camera);
-    this.camera.snapTo(this.local.renderX, this.local.renderY);
+    this.renderer.resize(w, h, this.camera, this.room.width, this.room.height);
+    const focus = this.cameraFocus();
+    this.camera.snapTo(focus.x, focus.y);
   };
 
   start(): void {
@@ -274,6 +353,9 @@ export class Game {
 
     this.room = buildRoom(def, this.assets);
     this.camera.setRoom(this.room.width, this.room.height);
+    // Rooms may ask for a different zoom; re-derive the scale before repositioning.
+    this.renderer.targetViewH = def.targetViewH ?? TARGET_VIEW_H;
+    this.handleResize();
 
     const spawn = this.room.def.spawns[target.spawn] ?? this.room.def.spawns[0];
     const free = findFreeSpawn(this.room, spawn.x, spawn.y);
@@ -284,6 +366,11 @@ export class Game {
     p.dir = "down";
     p.moving = false;
     p.emote = "";
+    p.carrying = -1;
+    // Lighting belongs to the room you left, not to you. Without this, walking out of a
+    // party leaves the village lit by disco lamps that nobody outside switched on.
+    this.mood = "normal";
+    this.burst = null;
 
     // Anyone still elsewhere keeps their own position; we simply stop drawing them.
     this.camera.snapTo(p.renderX, p.renderY);
@@ -328,8 +415,15 @@ export class Game {
     this.updateRemotes(dt);
     this.expireBubbles(Date.now());
     this.evictStalePeers(Date.now());
+    this.resolveCarryClash();
 
-    this.camera.update(this.local.renderX, this.local.renderY, dt);
+    if (this.burst) {
+      this.burst.time += dt;
+      if (this.burst.time >= BURST_SECONDS[this.burst.kind]) this.burst = null;
+    }
+
+    const focus = this.cameraFocus();
+    this.camera.update(focus.x, focus.y, dt);
     this.maybeSend();
 
     // Only draw people standing in the same place as you.
@@ -344,7 +438,37 @@ export class Game {
       this.input.usingTouch ? this.input.stick() : null,
       Date.now(),
       this.fade,
+      this.mood,
+      this.burst,
     );
+  }
+
+  /**
+   * What the camera looks at. Alone, that is simply you. With company it drifts toward
+   * the middle of the group, so in a room built for a meeting you can always see who you
+   * are talking to - following one character strictly put the other one off screen.
+   *
+   * The drift is capped at a fraction of the view from you in each axis, so somebody
+   * wandering off can never push you out of your own frame.
+   */
+  private cameraFocus(): { x: number; y: number } {
+    const here = [...this.players.values()].filter((p) => p.room === this.local.room);
+    if (here.length < 2) return { x: this.local.renderX, y: this.local.renderY };
+
+    let sx = 0;
+    let sy = 0;
+    for (const p of here) {
+      sx += p.renderX;
+      sy += p.renderY;
+    }
+    const avgX = sx / here.length;
+    const avgY = sy / here.length;
+    const limitX = this.camera.viewW * 0.4;
+    const limitY = this.camera.viewH * 0.3;
+    return {
+      x: Math.min(Math.max(avgX, this.local.renderX - limitX), this.local.renderX + limitX),
+      y: Math.min(Math.max(avgY, this.local.renderY - limitY), this.local.renderY + limitY),
+    };
   }
 
   private updateLocal(dt: number): void {
@@ -423,6 +547,24 @@ export class Game {
     }
   }
 
+  /**
+   * Two people can reach for the same thing on the same tick - each checks what is held
+   * before the other's packet lands, and both come away holding it. Lowest id keeps it;
+   * comparing ids rather than timestamps means both clients reach the same answer without
+   * having to agree on a clock.
+   */
+  private resolveCarryClash(): void {
+    if (this.local.carrying < 0) return;
+    for (const p of this.players.values()) {
+      if (p.id === this.local.id || p.room !== this.local.room) continue;
+      if (p.carrying === this.local.carrying && p.id < this.local.id) {
+        this.local.carrying = -1;
+        this.lastSent = null;
+        return;
+      }
+    }
+  }
+
   private expireBubbles(now: number): void {
     for (const p of this.players.values()) {
       if (p.bubble && now > p.bubble.born + p.bubble.duration) p.bubble = null;
@@ -458,6 +600,7 @@ export class Game {
       moving: p.moving,
       emote: p.emote,
       room: p.room,
+      carrying: p.carrying,
     };
     const prev = this.lastSent;
     const now = performance.now();
@@ -467,6 +610,7 @@ export class Game {
       prev.moving !== state.moving ||
       prev.emote !== state.emote ||
       prev.room !== state.room ||
+      prev.carrying !== state.carrying ||
       Math.abs(prev.x - state.x) > 0.4 ||
       Math.abs(prev.y - state.y) > 0.4;
 
@@ -503,6 +647,18 @@ export class Game {
       own: true,
     });
 
+    // Saying certain things sets something off wherever you are - an animation, a
+    // banner, or both. Room changes are handled separately, just below.
+    const magic = matchChatMagic(text, this.local.character);
+    if (magic) {
+      if (magic.emote) this.emote(magic.emote);
+      if (magic.announce) {
+        this.opts.onAnnounce(magic.announce.replace("{name}", this.local.name));
+      }
+      // Fired after the bubble is already on screen, so you see who said it.
+      if (magic.effect) this.fireEffect(magic.effect, this.local.name);
+    }
+
     // Saying the magic words takes the whole room with you.
     const trigger = matchSayTrigger(this.room.def, text);
     if (trigger) {
@@ -512,6 +668,60 @@ export class Game {
       // Let the bubble land before the screen goes dark.
       window.setTimeout(() => this.beginTransition(trigger.to, trigger.spawn ?? 0), 650);
     }
+  }
+
+  /**
+   * The takeable prop nearest the local player, or -1. Anything somebody is already
+   * holding is skipped, so two people cannot pick up the same thing.
+   */
+  private reachable(): number {
+    if (this.local.carrying >= 0) return -1;
+    const held = new Set<number>();
+    for (const p of this.players.values()) {
+      if (p.room === this.local.room && p.carrying >= 0) held.add(p.carrying);
+    }
+    let best = -1;
+    let bestDist = REACH_DIST;
+    this.room.def.props.forEach((prop, i) => {
+      if (!prop.takeable || held.has(i)) return;
+      const d = Math.hypot(prop.x - this.local.x, prop.y - this.local.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  /** What the contextual HUD button should offer right now. */
+  get reach(): { action: "take" | "put"; label: string } | null {
+    if (this.local.carrying >= 0) {
+      const prop = this.room.def.props[this.local.carrying];
+      return { action: "put", label: prop ? "PUT DOWN" : "PUT DOWN" };
+    }
+    const i = this.reachable();
+    if (i < 0) return null;
+    return { action: "take", label: "PICK UP" };
+  }
+
+  /** Picks up whatever is in reach, or puts down what is being carried. */
+  toggleCarry(): void {
+    if (this.local.carrying >= 0) {
+      this.local.carrying = -1;
+      this.audio.leave();
+      this.lastSent = null;
+      return;
+    }
+    const i = this.reachable();
+    if (i < 0) return;
+    this.local.carrying = i;
+    // Colin has a bending-down clip; anyone without one just picks it up.
+    if (this.assets.characters[this.local.character].meta.clips.pickup) {
+      this.local.emote = "pickup";
+      this.local.emoteTime = 0;
+    }
+    this.audio.join();
+    this.lastSent = null;
   }
 
   emote(clip: string): void {
