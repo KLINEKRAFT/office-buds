@@ -22,7 +22,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
  */
 
 /** Slabs behind the face, in px of depth. More layers than this is not visible. */
-const DEPTH = [2, 4, 6, 8, 10, 12];
+const DEPTH = [3, 6, 9, 12, 15, 18];
 
 /** How far the card leans, in degrees, at the edge of its container. */
 const MAX_TILT = 14;

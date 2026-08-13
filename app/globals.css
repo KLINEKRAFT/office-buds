@@ -195,8 +195,8 @@ button {
 
 .invite__float {
   position: relative;
-  width: 268px;
-  height: 150px;
+  width: 296px;
+  height: 158px;
   transform-style: preserve-3d;
   animation: invite-drift 9s ease-in-out infinite;
 }
@@ -226,19 +226,23 @@ button {
   background: var(--slate-dark);
 }
 
-.invite__slab:nth-child(1) { background: #40445c; }
-.invite__slab:nth-child(2) { background: #383c52; }
-.invite__slab:nth-child(3) { background: #313449; }
-.invite__slab:nth-child(4) { background: #2b2e40; }
-.invite__slab:nth-child(5) { background: #262837; }
-.invite__slab:nth-child(6) { background: #20222e; }
+.invite__slab:nth-child(1) { background: #4b5070; }
+.invite__slab:nth-child(2) { background: #414560; }
+.invite__slab:nth-child(3) { background: #383b53; }
+.invite__slab:nth-child(4) { background: #2f3245; }
+.invite__slab:nth-child(5) { background: #272937; }
+/* The deepest slab doubles as the card's shadow - it is the only thing under the card
+   at a steep lean, and without it the card floats on nothing. */
+.invite__slab:nth-child(6) { background: #191a23; }
 
 .invite__face {
   /* preserve-3d, NOT overflow:hidden: clipping flattens the subtree, and the lifted
      title is the thing that makes the card read as having depth rather than as a
      picture of depth. The sheen gets its own clipping wrapper instead. */
   transform-style: preserve-3d;
-  background: var(--slate);
+  /* A step lighter than the panel below it, so the card reads as the lit thing on the
+     screen rather than as another slab of chrome. */
+  background: var(--slate-light);
   box-shadow:
     inset 2px 2px 0 0 var(--bevel-light),
     inset -2px -2px 0 0 var(--bevel-shade);
@@ -264,6 +268,9 @@ button {
   letter-spacing: 0.1em;
   color: var(--cream);
   line-height: 1;
+  /* One line, always. Wrapped across two it stops reading as a logo and starts reading
+     as a sentence that ran out of room. */
+  white-space: nowrap;
   /* Lifted off the face, so the title has its own parallax as the card turns. */
   transform: translateZ(14px);
   text-shadow:
@@ -676,8 +683,8 @@ button {
 
 @media (min-width: 720px) {
   .invite__float {
-    width: 320px;
-    height: 176px;
+    width: 356px;
+    height: 186px;
   }
 
   .invite__title {

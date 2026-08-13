@@ -112,9 +112,18 @@ for (const [name] of CAST) {
       // Open the tray, tap the emote, read back what the game is playing.
       await tap(page, '.hud__bottomright .round:has-text("EMOTE")');
       await tap(page, `.tray .round:has-text("${labelFor(clip)}")`);
-      await page.waitForTimeout(70);
-      const me = local(await buds(page, () => window.__buds.players()));
-      out.push([clip, me.emote]);
+      // Wait for the state rather than sleeping at it. A fixed pause raced the frame
+      // that clears an emote when you are still moving, and failed about one run in ten
+      // on whichever emote happened to follow a long one.
+      const playing = await page
+        .waitForFunction(
+          (want) => window.__buds.players().find((p) => p.isLocal)?.emote === want,
+          clip,
+          { timeout: 2500 },
+        )
+        .then(() => clip)
+        .catch(async () => local(await buds(page, () => window.__buds.players())).emote);
+      out.push([clip, playing]);
       // A faint holds until you move, so shake it off before the next one.
       await walk(page, "ArrowUp", 90);
     }
