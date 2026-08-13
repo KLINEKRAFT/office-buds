@@ -1,4 +1,5 @@
-import type { Rect, Vec2 } from "../types";
+import type { Dir, Rect, Vec2 } from "../types";
+import type { Role } from "../cast";
 
 /** Which atlas a room's art comes from. Rooms do not mix them. */
 export type AtlasId = "office" | "village";
@@ -29,7 +30,7 @@ export interface PropDef {
 
 /**
  * A patch of ground laid with different tiles, snapped to the tile grid. Used for the
- * office break area and for ponds and paths outdoors.
+ * office rug and for ponds and paths outdoors.
  */
 export interface FloorZone {
   /** In tiles, relative to the top-left of the floor area (below any wall band). */
@@ -38,7 +39,13 @@ export interface FloorZone {
   tw: number;
   th: number;
   /** Sprite keys to pick between. One key means a flat fill. */
-  tiles: string[];
+  tiles?: string[];
+  /**
+   * Lay the zone as a nine-slice instead, from `${nine}_tl` through `${nine}_br`. A
+   * carpet swap reads as carpet laid differently, which is right for a break area and
+   * wrong for a rug - a rug wants a hem you can see the edge of.
+   */
+  nine?: string;
   /** Blocks movement across the whole zone - water, mostly. */
   solid?: boolean;
 }
@@ -76,6 +83,22 @@ export interface SayTrigger {
   announce: string;
 }
 
+/**
+ * A place to sit. Seats work without any sitting animation: in this front-on
+ * perspective a character parked slightly BEHIND a desk or sofa gets their legs covered
+ * by it, leaving head and shoulders above the furniture - which is exactly what sitting
+ * looks like from the front. So a seat is just a spot whose y sorts before the
+ * furniture's, plus a facing.
+ */
+export interface SeatDef {
+  id: string;
+  x: number;
+  y: number;
+  dir: Dir;
+  /** Who lands here on arrival. */
+  role: Role;
+}
+
 export interface RoomDef {
   id: string;
   name: string;
@@ -99,6 +122,13 @@ export interface RoomDef {
    */
   spawns: Vec2[];
   joinSpawns?: number;
+  /** Where people start when the room has assigned places rather than a free floor. */
+  seats?: SeatDef[];
+  /**
+   * Roughly how many world px should be visible vertically. Small rooms want a closer
+   * camera than a big floor plan; leaving it unset uses the global default.
+   */
+  targetViewH?: number;
   zones?: ZoneDef[];
   exits?: ExitDef[];
   sayTriggers?: SayTrigger[];

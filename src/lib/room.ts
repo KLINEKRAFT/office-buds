@@ -1,5 +1,3 @@
-import type { CharacterId } from "@/game/types";
-
 /** No 0/O/1/I/5/S - these get read aloud and typed by hand. */
 const ALPHABET = "ABCDEFGHJKLMNPQRTUVWXYZ2346789";
 const CODE_LENGTH = 4;
@@ -25,9 +23,9 @@ export function sanitizeName(raw: string): string {
 
 const KEY = "office-buds:profile";
 
+/** Only the name is remembered; the character comes from the cast list. */
 export interface Profile {
   name: string;
-  character: CharacterId;
 }
 
 export function loadProfile(): Profile | null {
@@ -38,10 +36,7 @@ export function loadProfile(): Profile | null {
     const parsed = JSON.parse(raw) as Partial<Profile>;
     const name = sanitizeName(parsed.name ?? "");
     if (!name) return null;
-    return {
-      name,
-      character: parsed.character === "michael" ? "michael" : "colin",
-    };
+    return { name };
   } catch {
     return null;
   }

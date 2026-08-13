@@ -97,11 +97,18 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
   const colliders: Rect[] = [];
 
   for (const zone of def.floorZones ?? []) {
-    const tiles = zone.tiles.map(get);
-    for (let ty = zone.ty; ty < zone.ty + zone.th; ty++) {
-      for (let tx = zone.tx; tx < zone.tx + zone.tw; tx++) {
+    const tiles = (zone.tiles ?? []).map(get);
+    const lastX = zone.tx + zone.tw - 1;
+    const lastY = zone.ty + zone.th - 1;
+    for (let ty = zone.ty; ty <= lastY; ty++) {
+      for (let tx = zone.tx; tx <= lastX; tx++) {
         if (tx < 0 || ty < 0 || tx >= def.widthTiles || ty >= def.heightTiles) continue;
-        const t = tiles[tileHash(tx + 977, ty + 311) % tiles.length];
+        const t = zone.nine
+          ? get(
+              `${zone.nine}_${ty === zone.ty ? "t" : ty === lastY ? "b" : "m"}` +
+                `${tx === zone.tx ? "l" : tx === lastX ? "r" : "c"}`,
+            )
+          : tiles[tileHash(tx + 977, ty + 311) % tiles.length];
         blit(t, tx * TILE, def.wallHeight + ty * TILE);
       }
     }

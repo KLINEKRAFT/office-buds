@@ -208,50 +208,6 @@ button {
   margin: 0;
 }
 
-/* ---- character picker ---------------------------------------------------- */
-
-.picker {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.picker__item {
-  appearance: none;
-  background: var(--slate);
-  border: 2px solid var(--ink);
-  box-shadow:
-    inset 2px 2px 0 0 rgba(255, 255, 255, 0.16),
-    inset -2px -2px 0 0 var(--bevel-shade);
-  padding: 8px 4px 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  color: var(--cream);
-}
-
-.picker__item[aria-pressed="true"] {
-  background: var(--accent);
-  box-shadow:
-    inset 2px 2px 0 0 rgba(255, 255, 255, 0.24),
-    inset -2px -2px 0 0 var(--bevel-shade),
-    0 0 0 2px var(--cream);
-}
-
-.picker__art {
-  width: 72px;
-  height: 72px;
-  background-repeat: no-repeat;
-  image-rendering: pixelated;
-}
-
-.picker__name {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-}
-
 /* ---- in-game HUD --------------------------------------------------------- */
 
 .stage {
@@ -571,4 +527,58 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
+}
+
+/* Entry screen: who you are about to walk in as. */
+.whoami {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--slate);
+  border: 2px solid var(--ink);
+  box-shadow:
+    inset 2px 2px 0 0 rgba(255, 255, 255, 0.14),
+    inset -2px -2px 0 0 var(--bevel-shade);
+  padding: 8px 10px;
+}
+
+.whoami__art {
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  flex: none;
+}
+
+.whoami__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--cream-dim);
+}
+
+.whoami__text strong {
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  color: var(--cream);
+}
+
+/*
+ * One small office is a portrait scene. Left to fill a landscape monitor it would sit
+ * as a narrow strip of room in a wide field of nothing, so on a wide screen the play
+ * surface is held to a phone-shaped column in the middle and the game fills it properly.
+ * The HUD is pinned to the same column so the chips stay on the picture rather than
+ * drifting off to the corners of the desktop.
+ *
+ * This lives at the end of the file on purpose: both rules set `inset: 0` earlier, and a
+ * media query adds no specificity, so it has to come last to win.
+ */
+@media (min-width: 860px) {
+  .stage,
+  .hud {
+    left: 50%;
+    right: auto;
+    width: min(100vw, 74vh);
+    transform: translateX(-50%);
+  }
 }

@@ -15,12 +15,12 @@ export function OfficeClient({ roomCode }: { roomCode: string }) {
   if (!profile) {
     return (
       <EntryScreen
-        action="Enter office"
+        action="Join the meeting"
         roomCode={roomCode}
         onSubmit={setProfile}
         footer={
           <p className="hint" style={{ textAlign: "center" }}>
-            Send this page&apos;s link to a friend and you will both land in the same office.
+            Type your name and you will walk in as yourself.
           </p>
         }
       />
@@ -65,6 +65,7 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
           roomCode,
           name: profile.name,
           character: profile.character,
+          role: profile.role,
           // ?room=outside drops you straight into a place, for laying rooms out.
           startRoom: new URLSearchParams(window.location.search).get("room") ?? undefined,
           onStatus: (s) => !cancelled && setStatus(s),
@@ -104,7 +105,7 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
       gameRef.current = null;
       game?.dispose();
     };
-  }, [roomCode, profile.name, profile.character]);
+  }, [roomCode, profile.name, profile.character, profile.role]);
 
   useEffect(() => {
     if (composerOpen) {

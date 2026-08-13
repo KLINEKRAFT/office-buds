@@ -35,6 +35,8 @@ export class Renderer {
   debugColliders = false;
   /** Forces a display scale instead of deriving one; set with ?scale=N. */
   scaleOverride = 0;
+  /** Roughly how many world px to show vertically. Rooms may override the default. */
+  targetViewH = TARGET_VIEW_H;
 
   /** World px -> CSS px. Always a whole number. */
   scale = 3;
@@ -57,15 +59,25 @@ export class Renderer {
    * Sizes the canvases. Everything is drawn once at world resolution then blitted up by
    * a whole number, which is what keeps the art crisp and costs one GPU scale per frame
    * instead of scaling every sprite.
+   *
+   * The scale is the larger of two demands. `targetViewH` asks to see roughly so much of
+   * the world vertically, which is what a big room wants. A small room wants the
+   * opposite: zoom in far enough that it fills the screen, or a one-room office ends up
+   * a postage stamp adrift in letterbox. Taking the max satisfies whichever matters -
+   * the fill term is dead weight in a big room, and the target term is dead weight in a
+   * small one. The 0.93 tolerates a few px of letterbox rather than jumping a whole
+   * scale step to chase the last one percent.
    */
-  resize(cssW: number, cssH: number, camera: Camera): void {
+  resize(cssW: number, cssH: number, camera: Camera, roomW: number, roomH: number): void {
     this.cssW = cssW;
     this.cssH = cssH;
     this.dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const fill = Math.ceil(Math.max(cssW / roomW, cssH / roomH) * 0.93);
+    const target = Math.round(cssH / this.targetViewH);
     this.scale =
       this.scaleOverride > 0
         ? this.scaleOverride
-        : Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.round(cssH / TARGET_VIEW_H)));
+        : Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.max(target, fill)));
 
     // Floor, not ceil: the canvas must never be wider than the viewport, or the browser
     // clips a half pixel off each edge and the outermost column goes soft. Rounding down

@@ -10,6 +10,7 @@ import {
   PEER_TIMEOUT_MS,
   REMOTE_SMOOTHING,
   REMOTE_SNAP_DIST,
+  TARGET_VIEW_H,
   TRANSITION_MS,
   WALK_SPEED,
 } from "./config";
@@ -20,7 +21,8 @@ import { Camera } from "./core/camera";
 import { Input } from "./core/input";
 import { Renderer } from "./render/renderer";
 import { createNet, type Net, type NetStatus } from "./net";
-import type { Bubble, ChatMessage, CharacterId, Dir, Player, PlayerState } from "./types";
+import type { Role } from "./cast";
+import type { Bubble, ChatMessage, CharacterId, Dir, Player, PlayerState, Vec2 } from "./types";
 import { buildRoom, type BuiltRoom } from "./world/build";
 import { bodyRect, findFreeSpawn, moveWithCollision } from "./world/collision";
 import { DEFAULT_ROOM, getRoom, matchSayTrigger } from "./world";
@@ -31,6 +33,8 @@ export interface GameOptions {
   roomCode: string;
   name: string;
   character: CharacterId;
+  /** Decides where you land: the manager gets the desk, everyone else the sofa. */
+  role: Role;
   startRoom?: string;
   onChat(message: ChatMessage): void;
   onStatus(status: NetStatus, detail?: string): void;
@@ -47,6 +51,23 @@ function uid(): string {
 
 function bubbleDuration(text: string): number {
   return Math.min(BUBBLE_MAX_MS, BUBBLE_MIN_MS + text.length * BUBBLE_PER_CHAR_MS);
+}
+
+/**
+ * Where somebody starts. Rooms with assigned seating put the manager behind the desk
+ * and visitors on the sofa, so arriving already looks like a meeting; rooms without
+ * seats fall back to their ordinary join spawns.
+ */
+function startPlace(room: BuiltRoom, role: Role): Vec2 & { dir: Dir } {
+  // First seat listed for the role, not a random one: the manager belongs at the desk
+  // and a visitor belongs on the sofa beside it. findFreeSpawn nudges the rare second
+  // visitor off to the spare chair rather than standing them inside somebody.
+  const seat = (room.def.seats ?? []).find((s) => s.role === role);
+  if (seat) return { x: seat.x, y: seat.y, dir: seat.dir };
+  const joinable = room.def.spawns.slice(0, room.def.joinSpawns ?? room.def.spawns.length);
+  const spawn = joinable[Math.floor(Math.random() * joinable.length)] ??
+    { x: room.width / 2, y: room.height / 2 };
+  return { x: spawn.x, y: spawn.y, dir: "down" };
 }
 
 function overlaps(a: { x: number; y: number; w: number; h: number }, b: typeof a): boolean {
@@ -91,12 +112,8 @@ export class Game {
   ) {
     this.room = room;
     const id = uid();
-    const joinable = room.def.spawns.slice(0, room.def.joinSpawns ?? room.def.spawns.length);
-    const spawn = joinable[Math.floor(Math.random() * joinable.length)] ?? {
-      x: room.width / 2,
-      y: room.height / 2,
-    };
-    const free = findFreeSpawn(room, spawn.x, spawn.y);
+    const start = startPlace(room, opts.role);
+    const free = findFreeSpawn(room, start.x, start.y);
 
     this.local = {
       id,
@@ -106,7 +123,7 @@ export class Game {
       y: free.y,
       renderX: free.x,
       renderY: free.y,
-      dir: "down",
+      dir: start.dir,
       moving: false,
       emote: "",
       room: room.def.id,
@@ -119,6 +136,7 @@ export class Game {
 
     this.camera = new Camera(room.width, room.height);
     this.renderer = new Renderer(opts.canvas, assets);
+    this.renderer.targetViewH = room.def.targetViewH ?? this.renderer.targetViewH;
     this.net = createNet(opts.roomCode, { id, name: opts.name, character: opts.character });
   }
 
@@ -232,8 +250,9 @@ export class Game {
     const rect = this.opts.surface.getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
-    this.renderer.resize(w, h, this.camera);
-    this.camera.snapTo(this.local.renderX, this.local.renderY);
+    this.renderer.resize(w, h, this.camera, this.room.width, this.room.height);
+    const focus = this.cameraFocus();
+    this.camera.snapTo(focus.x, focus.y);
   };
 
   start(): void {
@@ -274,6 +293,9 @@ export class Game {
 
     this.room = buildRoom(def, this.assets);
     this.camera.setRoom(this.room.width, this.room.height);
+    // Rooms may ask for a different zoom; re-derive the scale before repositioning.
+    this.renderer.targetViewH = def.targetViewH ?? TARGET_VIEW_H;
+    this.handleResize();
 
     const spawn = this.room.def.spawns[target.spawn] ?? this.room.def.spawns[0];
     const free = findFreeSpawn(this.room, spawn.x, spawn.y);
@@ -329,7 +351,8 @@ export class Game {
     this.expireBubbles(Date.now());
     this.evictStalePeers(Date.now());
 
-    this.camera.update(this.local.renderX, this.local.renderY, dt);
+    const focus = this.cameraFocus();
+    this.camera.update(focus.x, focus.y, dt);
     this.maybeSend();
 
     // Only draw people standing in the same place as you.
@@ -345,6 +368,34 @@ export class Game {
       Date.now(),
       this.fade,
     );
+  }
+
+  /**
+   * What the camera looks at. Alone, that is simply you. With company it drifts toward
+   * the middle of the group, so in a room built for a meeting you can always see who you
+   * are talking to - following one character strictly put the other one off screen.
+   *
+   * The drift is capped at a fraction of the view from you in each axis, so somebody
+   * wandering off can never push you out of your own frame.
+   */
+  private cameraFocus(): { x: number; y: number } {
+    const here = [...this.players.values()].filter((p) => p.room === this.local.room);
+    if (here.length < 2) return { x: this.local.renderX, y: this.local.renderY };
+
+    let sx = 0;
+    let sy = 0;
+    for (const p of here) {
+      sx += p.renderX;
+      sy += p.renderY;
+    }
+    const avgX = sx / here.length;
+    const avgY = sy / here.length;
+    const limitX = this.camera.viewW * 0.4;
+    const limitY = this.camera.viewH * 0.3;
+    return {
+      x: Math.min(Math.max(avgX, this.local.renderX - limitX), this.local.renderX + limitX),
+      y: Math.min(Math.max(avgY, this.local.renderY - limitY), this.local.renderY + limitY),
+    };
   }
 
   private updateLocal(dt: number): void {
