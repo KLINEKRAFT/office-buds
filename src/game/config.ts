@@ -13,6 +13,11 @@ export const BODY_W = 12;
 export const BODY_H = 7;
 
 export const WALK_SPEED = 66; // px/sec
+/** Held Shift, or the stick at full travel. Only Colin has the sheet for it so far. */
+export const RUN_SPEED = 104;
+export const RUN_FPS = 14;
+/** How far the stick has to be pushed before it counts as asking to run. */
+export const RUN_STICK = 0.92;
 /** walk_side/walk_down are authored at this fps; we scale it with real speed so the
  *  feet do not slide when the joystick is only pushed halfway. */
 export const WALK_FPS_AT_FULL_SPEED = 11;

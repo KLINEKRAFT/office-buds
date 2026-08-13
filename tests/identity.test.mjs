@@ -88,20 +88,18 @@ console.log(`\n${passed} passed${process.exitCode ? " (with failures)" : ""}`);
 console.log("\ndecodeMove");
 
 check("a full packet survives intact", () => {
-  const state = decodeMove({
-    x: 12, y: 34, dir: "left", moving: true, emote: "dance",
+  const packet = {
+    x: 12, y: 34, dir: "left", moving: true, running: true, emote: "dance",
     room: "grove", carrying: 3, ascended: true, dead: 5,
-  });
-  assert.deepEqual(state, {
-    x: 12, y: 34, dir: "left", moving: true, emote: "dance",
-    room: "grove", carrying: 3, ascended: true, dead: 5,
-  });
+  };
+  assert.deepEqual(decodeMove(packet), packet);
 });
 
 check("a peer on an older build is not doing the newest thing", () => {
   // The honest reading of a missing field is "not that", not "undefined".
   const state = decodeMove({ x: 0, y: 0 });
   assert.equal(state.dead, -1);
+  assert.equal(state.running, false);
   assert.equal(state.carrying, -1);
   assert.equal(state.ascended, false);
   assert.equal(state.emote, "");

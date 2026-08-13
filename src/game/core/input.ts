@@ -1,4 +1,4 @@
-import { STICK_DEADZONE } from "../config";
+import { RUN_STICK, STICK_DEADZONE } from "../config";
 
 export interface StickView {
   active: boolean;
@@ -38,6 +38,13 @@ function isTyping(target: EventTarget | null): boolean {
  */
 export class Input {
   private readonly keys = new Set<string>();
+  /**
+   * How hard the stick is pushed, 0..1, from the last vector() call.
+   *
+   * A thumb already has a way to ask for more speed - push further - so running on touch
+   * needs no second control. A keyboard has no such axis, which is what Shift is for.
+   */
+  private lastMag = 0;
   private touchId: number | null = null;
   private originX = 0;
   private originY = 0;
@@ -55,6 +62,12 @@ export class Input {
       // box at all - you could not write "was" or move the caret.
       if (isTyping(e.target)) return;
       const k = e.key.toLowerCase();
+      // Shift is tracked but not swallowed: it is a modifier the browser has other uses
+      // for, and holding it should never stop anything else working.
+      if (k === "shift") {
+        this.keys.add(k);
+        return;
+      }
       if (KEY_VECTORS[k]) {
         this.keys.add(k);
         e.preventDefault();
@@ -135,16 +148,27 @@ export class Input {
     this.touchId = null;
   }
 
+  /** True while the player is asking to move faster than a walk. */
+  running(): boolean {
+    if (this.usingTouch) return this.lastMag > RUN_STICK;
+    return this.keys.has("shift");
+  }
+
   /** Movement vector with magnitude 0..1. Touch wins when both are active. */
   vector(): { x: number; y: number } {
     if (this.touchId !== null) {
       const dx = this.knobX - this.originX;
       const dy = this.knobY - this.originY;
       const len = Math.hypot(dx, dy);
-      if (len < STICK_RANGE * STICK_DEADZONE) return { x: 0, y: 0 };
+      if (len < STICK_RANGE * STICK_DEADZONE) {
+        this.lastMag = 0;
+        return { x: 0, y: 0 };
+      }
       const mag = Math.min(1, len / STICK_RANGE);
+      this.lastMag = mag;
       return { x: (dx / len) * mag, y: (dy / len) * mag };
     }
+    this.lastMag = 0;
 
     let x = 0;
     let y = 0;

@@ -44,6 +44,7 @@ export function decodeMove(raw: Record<string, unknown> | undefined | null): Pla
     moving: Boolean(raw.moving),
     emote: typeof raw.emote === "string" ? raw.emote : "",
     room: typeof raw.room === "string" ? raw.room : "office",
+    running: Boolean(raw.running),
     carrying: typeof raw.carrying === "number" ? raw.carrying : -1,
     ascended: Boolean(raw.ascended),
     dead: typeof raw.dead === "number" ? raw.dead : -1,

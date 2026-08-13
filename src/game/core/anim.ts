@@ -1,4 +1,4 @@
-import { FRAME, WALK_FPS_AT_FULL_SPEED, WALK_SPEED } from "../config";
+import { FRAME, RUN_FPS, WALK_FPS_AT_FULL_SPEED, WALK_SPEED } from "../config";
 import type { CharacterMeta } from "./assets";
 import { frameRect, procPose, procSeconds, resolveEmote } from "./emotes";
 import type { Dir, Player } from "../types";
@@ -79,7 +79,12 @@ export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pos
       rot: 0,
     };
   } else if (player.moving) {
-    clipName = `walk_${suffix(player.dir)}`;
+    // A run cycle where there is one and the direction suits it. Only Colin has a sheet,
+    // and only from the side, so everybody else - and every other facing - gets the walk
+    // played faster, which is the same trade the emotes make.
+    const side = suffix(player.dir) === "side";
+    clipName =
+      player.running && side && meta.clips.run_side ? "run_side" : `walk_${suffix(player.dir)}`;
     time = player.animTime;
   } else {
     clipName = `idle_${suffix(player.dir)}`;
@@ -91,7 +96,11 @@ export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pos
   // Match stride to actual speed so the feet do not skate at half-joystick.
   let fps = clip.fps;
   if (player.moving && clipName.startsWith("walk")) {
+    // Match stride to actual speed so the feet do not skate at half-joystick - and so a
+    // character with no run sheet at least moves their legs like they mean it.
     fps = WALK_FPS_AT_FULL_SPEED * Math.max(0.35, speed / WALK_SPEED);
+  } else if (clipName === "run_side") {
+    fps = RUN_FPS;
   }
 
   const raw = Math.floor(time * fps);

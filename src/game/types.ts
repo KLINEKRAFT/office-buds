@@ -40,6 +40,12 @@ export interface PlayerState {
   /** Which room this player is standing in. Players elsewhere are not drawn. */
   room: string;
   /**
+   * Moving at a run rather than a walk. Replicated because the renderer cannot tell:
+   * a remote player's speed is assumed rather than measured, so without this everybody
+   * else's sprint would be drawn as a stroll.
+   */
+  running: boolean;
+  /**
    * Index into the room's prop list of the thing this player is holding, or -1.
    *
    * The whole of the world's "what has been picked up" state lives in this one
