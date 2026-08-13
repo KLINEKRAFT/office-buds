@@ -97,7 +97,7 @@ src/game/
   render/               renderer, speech bubbles, name plates
   net/                  transport interface + Supabase and same-browser drivers
 tools/                  Python art pipeline (run only when the source art changes)
-art-source/             high-resolution character sheets, and the vendored art packs
+art-source/             high-resolution character sheets (see art-source/README.md)
 public/assets/          generated atlases, committed so the app needs no build step
 ```
 
@@ -317,7 +317,6 @@ npm run assets
 - `tools/build_office.py` — the office atlas: named pieces cut out of LimeZu's Modern
   Office pack, wallpaper and floor tiles sliced off its room builder, plus the nine-slice
   rug the pack does not include
-- `tools/build_props.py` — the previous furniture atlas, kept for reference
 - `tools/build_village.py` — the outdoor atlas: props scaled against the 40px character,
   desaturated to sit beside the office, and grass cut as 16 crops so it does not repeat
 - `tools/build_font.py` — rasterises the two bitmap fonts
@@ -339,10 +338,13 @@ Two notes on the outdoor art, both learned the hard way:
 
 ## Credits
 
-Characters are the project's own, in `art-source/characters/`.
+The office furniture is **Modern Office - Revamped** by **[LimeZu](https://limezu.itch.io/)**,
+used under its licence, which permits commercial and non-commercial use and forbids
+redistributing the art. `public/assets/props.png` — the packed atlas the game loads — is a
+derived work and ships here. The pack's own files are gitignored and are not in this
+repository; `art-source/README.md` says where to put them if you need to rebuild.
 
-The office is built from LimeZu's **Modern Office - Revamped**, vendored under
-`art-source/modern-office/` with its licence: commercial use is permitted, redistributing
-the art itself is not. The village pack is under `art-source/village/`.
+The cast in `art-source/characters/` and the outdoor art in `art-source/village/` are the
+project's own.
 
 The bitmap fonts are rasterised from Liberation Sans Bold (SIL Open Font License 1.1).

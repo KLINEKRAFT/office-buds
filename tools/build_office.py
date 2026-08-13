@@ -5,7 +5,7 @@ Office Buds - office atlas builder (LimeZu "Modern Office - Revamped").
 Packs the pieces of the pack this office actually uses into one atlas, and writes the
 same props.png / props.json the game already loads, so nothing downstream changes.
 
-Three sources, all under art-source/modern-office/:
+Two sources, both under art-source/modern-office/:
 
 1. singles/       339 numbered sprites, each centred in a 32x48 box. They are trimmed to
                   their opaque pixels here, so rooms can place them by bottom-centre
@@ -13,8 +13,11 @@ Three sources, all under art-source/modern-office/:
 2. Room_Builder   one 16x16-grid sheet. The left half is wallpaper - each style is a
                   32px band containing its own cap and skirting, so a wall band is one
                   16px-wide slice tiled sideways. The right half is floor tiles.
-3. LICENSE.txt    vendored alongside; the pack allows commercial use but not
-                  redistribution of the art itself.
+
+The pack itself is NOT in the repository - its licence allows using the art but not
+redistributing it, so `art-source/modern-office/` is gitignored and the committed
+`public/assets/props.png` (a derived work, which the licence is for) is what ships. You
+only need the pack to change the office art; see art-source/README.md.
 
 The pack is drawn from a higher angle than a person is - you see the top of a desk but
 you look a character in the eye - so the two do not agree perfectly. It lands close
@@ -206,7 +209,25 @@ def trim(im: Image.Image) -> Image.Image:
     return im.crop((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1))
 
 
+def require_pack() -> None:
+    """
+    The pack is not in the repository - its licence forbids redistributing the art, and
+    the generated atlas is what ships. So the common way to run this builder is without
+    the input, and it should say so in one line rather than dying on a stray file.
+    """
+    if os.path.isdir(os.path.join(SRC, "singles")):
+        return
+    raise SystemExit(
+        f"Modern Office pack not found at {SRC}\n"
+        "\n"
+        "It is gitignored on purpose: the licence allows using the art, not\n"
+        "redistributing it, and public/assets/props.png is already built and committed.\n"
+        "You only need the pack to change the office art. See art-source/README.md."
+    )
+
+
 def main() -> None:
+    require_pack()
     sprites: dict[str, Image.Image] = {}
 
     for name, idx in SINGLES.items():
