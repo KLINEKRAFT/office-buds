@@ -26,12 +26,15 @@ is Colin, Michael, Alexis, Melanie and Tiffany; anyone else gets in as a guest.
   hand-drawn art it plays; where they do not, the same button plays a version
   synthesised from frames every character has (see *Emotes* below).
 - **LOG** shows recent messages, so nothing is lost once a bubble fades.
+- **WHOLE FLOOR** pulls the camera back until you can see the entire building at once —
+  which is how you find everybody. Anybody off screen also gets an arrow at the edge with
+  their name on it, and the chip in the top-left says which room you are standing in.
 - **PICK UP** appears when you are standing next to something you can lift. You then
   carry it over your head until you put it down, and everyone sees you holding it.
 - Walk onto a chair to sit in it, or in behind the desk to sit at it.
 - Doors open as you walk up to them and shut behind you. Nothing about that crosses the
   network — every screen works it out from positions it already has.
-- **Take the lift** in reception to reach the grove on your own. Or say **"let's go
+- **Take the lift** in the middle of the floor to reach the grove on your own. Or say **"let's go
   outside"** and the whole room goes with you; say **"back to work"** out there to march
   everyone back in. The cottage is the way back.
 - The office code in the top-left copies (or opens the share sheet for) the invite link.
@@ -264,33 +267,72 @@ tile swap cannot give you.
 
 #### Walls, and sections
 
-The office is four sections on one floor — reception with the lift, open plan, Colin's
-office, and the break room — divided by `walls`, runs of tiles with doorway gaps in them.
+The office is the real one, laid out from the floor plan of Colin's actual workplace: a
+ring hallway around a central lift core, with the rooms hung off it where they really
+are. Hang out room north-west, kitchen and bathrooms across the top, marketing
+north-east, Michael's office off the west hallway, print room and shared workspace east,
+conference room south. Somebody who works there should be able to navigate it.
 
-A wall is cut into one segment per tile and depth sorted with everything else, rather
-than baked into the background the way the top-edge band is. That matters because you
-walk round both sides of an interior wall, and it is what makes a *vertical* run work at
-all: each tile needs its own sort key, or the whole run flips in front of you at once as
-you walk down beside it.
+The topology is faithful; the dimensions are not. The real floor is about a hundred feet
+square, which at this scale is roughly 670x670 world px — a phone shows 130x280 of that,
+so you would see one twentieth of the building at a time. That is the village mistake
+again. So the corridors are shortened and the thirty-odd near-identical perimeter offices
+are down to the few you walk past: 352x448, about three phone screens across and two down.
+
+Rooms are divided by `walls` — runs of tiles with doorway gaps in them. A wall is cut
+into one segment per tile and depth sorted with everything else, rather than baked into
+the background the way the top-edge band is, because you walk round both sides of an
+interior wall. Per tile is what makes a vertical run work at all: each tile needs its own
+sort key, or the whole run flips in front of you at once as you walk down beside it.
+
+Horizontal and vertical runs are drawn differently, which took a wrong version to learn.
+A wall running east-west shows you its face: the full 32px band, cornice and skirting. A
+wall running north-south is seen from *above* — you look along it, not at it — so it is
+one 16px strip of the repeating body. Drawing the face for both was the obvious thing and
+came out as a ladder of white stripes, because every tile repeated the cornice 16px below
+the last one.
 
 A wall is 32px of art standing on a 16px tile, so it covers the tile behind it as well as
 its own. That is not a problem to design around — a character is 40px, so somebody in
-that strip shows their head and shoulders over the top of the partition, which is what
-standing behind a wall looks like. It does mean furniture placed there gets its top
-painted over, so `tests/world.test.mjs` fails the build if any prop's anchor lands inside
-a wall's band. That check exists because the failure is completely silent otherwise: the
-prop is drawn, and then it is not there.
+that strip shows their head and shoulders over the top, which is what standing behind a
+wall looks like. It does mean two things fail silently: furniture placed there is drawn
+and then painted over, and a desk pushed against a doorway makes a room unreachable with
+nothing to say so. `tests/world.test.mjs` fails the build on both, and on a room with no
+doorway onto it at all.
+
+It also means a horizontal corridor needs to be three tiles deep rather than two. Two
+gives you one row you can walk down and cannot see yourself in.
 
 #### Doors
 
 Doors come from LimeZu's Modern Interiors, because Modern Office has 339 sprites in it
-and not one of them is a door. They are four frames per door — shut, and three stages of
-swinging open — and the renderer picks between them by how close the nearest person is.
+and not one of them is a door. Three frames each — shut, ajar, open — and the renderer
+picks between them by how close the nearest person is.
 
 Nothing about that is on the wire. Every client already knows where everybody is, so
 every client reaches the same frame on the same tick without a byte being sent, and a
-late joiner sees the doors in the right state immediately. It is the same idea as
-`carrying`: derive it from what is already replicated rather than replicate it again.
+late joiner sees the doors in the right state immediately. Same idea as `carrying`:
+derive it from what is already replicated rather than replicate it again.
+
+Two details, both learned by looking at it. The sheet has a fourth frame — the door
+edge-on — which at this size is three pixels wide and forty-one tall, and reads as a pole
+somebody left in the doorway; it is dropped. And every frame is cropped to the height of a
+wall, because a door drawn swinging out toward the viewer is taller than the wall it
+stands in, and the part above the wall line is a part of the door you could not see.
+
+#### Finding each other
+
+A building is where you lose people, so three things exist that a one-room office did not
+need:
+
+- **The room you are standing in** is named in the HUD, read off the `zones` array — which
+  had been carried since the first version with nothing reading it. This is what it was for.
+- **Anybody off-screen gets an arrow** at the edge of the frame with their name under it,
+  clamped to the rim and pointing along the line to them, so walking toward it works.
+  Costs nothing when everybody is already in shot.
+- **WHOLE FLOOR** pulls the camera back until the entire building fits. Deliberately
+  allowed below `MIN_SCALE`: at 1x a character is 40 screen px, which is small but
+  perfectly legible, and seeing the whole plan at once is the entire point of the button.
 
 ### Sitting down, without any sitting art
 
@@ -304,12 +346,8 @@ the sofa beside it, so a meeting looks like a meeting the moment both people are
 sofas are deliberately not solid, which makes this something you can also do on purpose —
 walk onto a sofa and you are sitting on it.
 
-The office is 176x448 world px — one phone screen wide and about three deep, so the
-camera travels as you walk the floor and each section arrives as you come through its
-door. It was one 160x240 room for a while, which fitted on a screen entirely and was
-right when there was one desk in it; "one room" and "an office" turned out to be
-different things. With two people in the room the camera frames the group rather than
-following one person, or you would be talking to someone off screen.
+With two people in the room the camera frames the group rather than following one
+person, or you would be talking to someone off screen.
 
 ### Going places
 

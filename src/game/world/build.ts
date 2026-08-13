@@ -64,6 +64,20 @@ function layerRank(p: PropDef): number {
 /** Height of the lintel left above a doorway, in px, for every wall in the game. */
 const LINTEL = 7;
 
+/** Frames a door is cut into: shut, ajar, open. See tools/build_office.py. */
+const DOOR_FRAMES = [0, 1, 2];
+
+/**
+ * Where the repeating part of a wallpaper band starts, below its cornice.
+ *
+ * A wall running north-south is seen from above in this projection - you look along it,
+ * not at it - so it is drawn as a 16px strip of that repeating body rather than as the
+ * full 32px face. Drawing the face was the obvious thing and was wrong: each tile
+ * repeated the cornice 16px below the last one, and a side wall came out as a ladder of
+ * white stripes.
+ */
+const WALL_BODY_TOP = 6;
+
 /**
  * Cheap deterministic hash. Ground tiles pick their variant from this so a field of
  * grass never falls into a visible repeat, and the same tile is the same every frame.
@@ -181,6 +195,22 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
       // The floor line of the tile the wall stands on: its base, and its sort key.
       const base = def.wallHeight + (ty + 1) * TILE;
       const isGap = open.has(i);
+      if (run.dir === "v") {
+        // Seen from above: one tile of wallpaper body, filling its own square and
+        // nothing else. A gap is simply left out - there is no face to put a lintel on.
+        if (!isGap) {
+          floorProps.push({
+            rect: { x: wall.x, y: wall.y + WALL_BODY_TOP, w: wall.w, h: TILE },
+            x: tx * TILE,
+            y: base - TILE,
+            flip: false,
+            sortY: base,
+            propIndex: -1,
+          });
+          colliders.push({ x: tx * TILE, y: def.wallHeight + ty * TILE, w: TILE, h: TILE });
+        }
+        continue;
+      }
       // A doorway keeps the lintel above it. Without that the opening runs to the
       // ceiling and reads as a wall somebody forgot to finish rather than a door.
       const rect = isGap ? { x: wall.x, y: wall.y, w: wall.w, h: LINTEL } : wall;
@@ -207,7 +237,7 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
   for (const p of ordered) {
     // A door is four sprites under one name. Frame 0 is the shut one, and every frame is
     // cut to the same box so the leaf pivots instead of jumping sideways as it swings.
-    const frames = p.door ? [0, 1, 2, 3].map((i) => get(`${p.sprite}_${i}`)) : undefined;
+    const frames = p.door ? DOOR_FRAMES.map((i) => get(`${p.sprite}_${i}`)) : undefined;
     const rect = frames ? frames[0] : get(p.sprite);
     const drawX = Math.round(p.x - rect.w / 2);
     const drawY = Math.round(p.y - rect.h);

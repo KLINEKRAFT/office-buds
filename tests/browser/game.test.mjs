@@ -250,19 +250,19 @@ suite("the floor plan");
 const plan = await scenario(async (ctx) => {
   const page = await joinAs(ctx, "COLIN");
 
-  // Walls block. Put Colin above the reception wall away from its doorway, walk down
-  // hard, and he should still be above it.
-  await buds(page, () => window.__buds.place(40, 110));
+  // Walls block. Put Colin in the kitchen above a solid stretch of the wall that divides
+  // the north band from the hallway, walk down hard, and he should still be above it.
+  await buds(page, () => window.__buds.place(104, 120));
   await walk(page, "ArrowDown", 900);
   const stopped = local(await buds(page, () => window.__buds.players()));
 
-  // Doorways do not. The reception doorway is at x 112..144 on the same wall.
-  await buds(page, () => window.__buds.place(120, 110));
+  // Doorways do not. The kitchen's doorway onto the hallway is at x 160..192.
+  await buds(page, () => window.__buds.place(168, 120));
   await walk(page, "ArrowDown", 1100);
   const through = local(await buds(page, () => window.__buds.players()));
 
-  // Something to pick up, and putting it back.
-  await buds(page, () => window.__buds.place(48, 196));
+  // Something to pick up, and putting it back: the keyboard on Colin's own desk.
+  await buds(page, () => window.__buds.place(296, 62));
   await page.waitForTimeout(350);
   const reach = await buds(page, () => window.__buds.reach());
   let carrying = -1;
@@ -279,7 +279,7 @@ const plan = await scenario(async (ctx) => {
 });
 
 check("a wall stops you", () => {
-  assert.ok(plan.stopped.y <= 130, `walked through the wall to y=${plan.stopped.y}`);
+  assert.ok(plan.stopped.y <= 132, `walked through the wall to y=${plan.stopped.y}`);
 });
 
 check("a doorway lets you through", () => {
@@ -298,6 +298,54 @@ check("picking up and putting down both work", () => {
 
 check("walking around logs no errors", () => {
   assert.deepEqual(plan.errors, []);
+});
+
+// ---------------------------------------------------------------------------------
+suite("finding your way around a building");
+
+const nav = await scenario(async (ctx) => {
+  const page = await joinAs(ctx, "COLIN");
+  const rooms = [];
+  for (const [label, x, y] of [
+    ["HANG OUT ROOM", 40, 80],
+    ["KITCHEN", 136, 80],
+    ["MARKETING", 312, 80],
+    ["MICHAEL'S OFFICE", 40, 192],
+    ["PRINT ROOM", 312, 176],
+    ["CONFERENCE ROOM", 168, 400],
+    ["THE HALLWAY", 168, 160],
+  ]) {
+    await buds(page, (p) => window.__buds.place(p[0], p[1]), [x, y]);
+    await page.waitForTimeout(120);
+    rooms.push([label, await buds(page, () => window.__buds.here())]);
+  }
+
+  // The whole floor at once, and back.
+  const before = await buds(page, () => window.__buds.zoomedOut());
+  await tap(page, '.hud__bottomright .round:has-text("WHOLE FLOOR")');
+  await page.waitForTimeout(250);
+  const zoomed = await buds(page, () => window.__buds.zoomedOut());
+  await tap(page, '.hud__bottomright .round:has-text("CLOSE UP")');
+  await page.waitForTimeout(250);
+  const back = await buds(page, () => window.__buds.zoomedOut());
+
+  return { rooms, before, zoomed, back, errors: noisyErrors(page) };
+});
+
+check("the HUD names the room you are standing in", () => {
+  for (const [expected, actual] of nav.rooms) {
+    assert.equal(actual, expected, `stood in ${expected} and the HUD said ${actual}`);
+  }
+});
+
+check("the whole-floor view toggles both ways", () => {
+  assert.equal(nav.before, false);
+  assert.equal(nav.zoomed, true, "WHOLE FLOOR did not zoom out");
+  assert.equal(nav.back, false, "CLOSE UP did not come back");
+});
+
+check("getting around logs no errors", () => {
+  assert.deepEqual(nav.errors, []);
 });
 
 // ---------------------------------------------------------------------------------

@@ -228,15 +228,25 @@ DOORS: dict[str, tuple[str, str, str]] = {
     "Doors_special": ("door_wc", "door_exit", "door_cold"),
 }
 
-# Every frame is cut to the same box so the four of them share one anchor - otherwise
-# the door jumps sideways as it opens. The leaf swings up and out in perspective, so the
-# open frames are taller than the closed one and the box has to fit the tallest.
+# Every frame is cut to the same box so they share one anchor - otherwise the door jumps
+# sideways as it opens. The leaf swings up and out in perspective, so the open frames are
+# taller than the closed one and the box has to fit the tallest.
+#
+# Three frames, not the four in the sheet. MV's last frame is the door edge-on, which at
+# this size is three pixels wide and forty-one tall - it reads as a pole somebody left in
+# the doorway rather than as a door standing open. The third frame is a door at an angle,
+# which is what "open" should look like.
 DOOR_CELL_W, DOOR_CELL_H = 16, 48
-DOOR_TOP, DOOR_BOTTOM = 4, 47
+DOOR_FRAMES = 3
+# The frames are cut off at the height of a wall. A door swinging open is drawn leaning
+# out toward the viewer, so its open frames are taller than the wall it stands in - and
+# the part above the wall line is part of a door you could not actually see. Clipping it
+# is what the wall would do.
+DOOR_TOP, DOOR_BOTTOM = 18, 47
 
 
 def door_frames() -> dict[str, Image.Image]:
-    """Every door, as `<name>_0` (shut) through `<name>_3` (wide open)."""
+    """Every door, as `<name>_0` (shut) through `<name>_2` (standing open)."""
     out: dict[str, Image.Image] = {}
     for stem, names in DOORS.items():
         path = os.path.join(INTERIORS, f"{stem}.png")
@@ -249,7 +259,7 @@ def door_frames() -> dict[str, Image.Image]:
         sheet = Image.open(path).convert("RGBA")
         native = Image.fromarray(np.array(sheet)[::3, ::3])
         for col, name in enumerate(names):
-            for row in range(4):
+            for row in range(DOOR_FRAMES):
                 box = (
                     col * DOOR_CELL_W,
                     row * DOOR_CELL_H + DOOR_TOP,

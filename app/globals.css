@@ -388,8 +388,12 @@ button {
   top: calc(env(safe-area-inset-top, 0px) + 8px);
   left: calc(env(safe-area-inset-left, 0px) + 8px);
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  align-items: center;
+  align-items: flex-start;
+  /* Leaves room for the connection chip on the right. Wrapping rather than shrinking
+     keeps a long room name - SHARED WORKSPACE - readable on a 360px phone. */
+  max-width: calc(100% - 150px);
 }
 
 .hud__topright {
@@ -428,6 +432,14 @@ button {
 
 .chip--button {
   cursor: pointer;
+}
+
+/* The room you are standing in. Quieter than the invite chip beside it: it changes as
+   you walk, and something that changes constantly must not also shout. */
+.chip--place {
+  background: rgba(34, 34, 45, 0.62);
+  color: var(--cream-dim);
+  letter-spacing: 0.18em;
 }
 
 .chip__dot {
