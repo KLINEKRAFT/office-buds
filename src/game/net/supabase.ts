@@ -2,7 +2,8 @@ import { createClient, type RealtimeChannel, type SupabaseClient } from "@supaba
 
 import { NET_SEND_HZ } from "../config";
 import type { CharacterId, PlayerState } from "../types";
-import type { Net, NetHandlers, NetIdentity } from "./types";
+import { decodeIdentity } from "./identity";
+import type { Net, NetHandlers } from "./types";
 
 /**
  * Realtime over a single Supabase channel. No database, no auth, no tables:
@@ -117,19 +118,14 @@ export class SupabaseNet implements Net {
     const handlers = this.handlers;
     if (!channel || !handlers) return;
 
-    const state = channel.presenceState<{ name?: string; character?: string }>();
+    const state = channel.presenceState<{ name?: unknown; character?: unknown }>();
     const seen = new Set<string>();
 
     for (const [key, metas] of Object.entries(state)) {
       if (key === this.id) continue;
       seen.add(key);
       if (this.roster.has(key)) continue;
-      const meta = metas?.[0];
-      handlers.onJoin({
-        id: key,
-        name: (meta?.name || "BUD").slice(0, 12),
-        character: (meta?.character === "michael" ? "michael" : "colin") as CharacterId,
-      } satisfies NetIdentity);
+      handlers.onJoin(decodeIdentity(key, metas?.[0]));
     }
 
     for (const key of this.roster) {

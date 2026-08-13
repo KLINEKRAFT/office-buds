@@ -1,5 +1,17 @@
 export type Dir = "up" | "down" | "left" | "right";
-export type CharacterId = "colin" | "michael" | "alexis" | "melanie" | "tiffany";
+/**
+ * Every character with art. This is a runtime list and the type is derived FROM it, not
+ * the other way round: a hand-written union let a peer decoder go stale against it - it
+ * clamped every arrival to one of the two characters that existed when it was written,
+ * so three of the five turned up wearing somebody else's face over the network.
+ */
+export const CHARACTER_IDS = ["colin", "michael", "alexis", "melanie", "tiffany"] as const;
+
+export type CharacterId = (typeof CHARACTER_IDS)[number];
+
+export function isCharacterId(value: unknown): value is CharacterId {
+  return typeof value === "string" && (CHARACTER_IDS as readonly string[]).includes(value);
+}
 
 export interface Vec2 {
   x: number;

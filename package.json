@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "assets": "python3 tools/build_sprites.py && python3 tools/build_props.py && python3 tools/build_font.py"
+    "assets": "python3 tools/build_sprites.py && python3 tools/build_office.py && python3 tools/build_village.py && python3 tools/build_font.py",
+    "test": "tsc src/game/net/identity.ts --outDir .testbuild --module esnext --target es2022 --moduleResolution bundler --skipLibCheck && node tools/esm_fixup.mjs .testbuild && node tests/identity.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.58.0",

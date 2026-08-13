@@ -1,5 +1,6 @@
 import type { CharacterId, PlayerState } from "../types";
-import type { Net, NetHandlers, NetIdentity } from "./types";
+import { decodeIdentity } from "./identity";
+import type { Net, NetHandlers } from "./types";
 
 type Msg =
   | { t: "hello" | "hello_ack"; id: string; name: string; character: CharacterId }
@@ -55,7 +56,9 @@ export class LocalNet implements Net {
   private register(id: string, name: string, character: CharacterId): boolean {
     if (id === this.id || this.known.has(id)) return false;
     this.known.add(id);
-    this.handlers?.onJoin({ id, name, character } satisfies NetIdentity);
+    // Through the same decoder as the Supabase driver, so the two transports can never
+    // disagree about who somebody is.
+    this.handlers?.onJoin(decodeIdentity(id, { name, character }));
     return true;
   }
 
