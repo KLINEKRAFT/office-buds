@@ -1,6 +1,6 @@
 import type { RoomDef } from "./types";
 import { office } from "./office";
-import { outside } from "./outside";
+import { grove } from "./grove";
 
 /**
  * Room registry. Adding a place means writing one file and listing it here - the
@@ -8,7 +8,7 @@ import { outside } from "./outside";
  */
 export const ROOMS: Record<string, RoomDef> = {
   [office.id]: office,
-  [outside.id]: outside,
+  [grove.id]: grove,
 };
 
 export const DEFAULT_ROOM = office.id;

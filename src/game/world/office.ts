@@ -91,9 +91,9 @@ export const office: RoomDef = {
    *   tub chairs are 18px tall, so a seat 4px above the anchor tucks the legs in.
    */
   seats: [
-    { id: "desk", x: 40, y: 92, dir: "down", kind: "desk" },
-    { id: "chair_left", x: 80, y: 120, dir: "down", kind: "sofa" },
-    { id: "chair_right", x: 120, y: 124, dir: "down", kind: "sofa" },
+    { id: "desk", x: 40, y: 92, dir: "down", kind: "lead" },
+    { id: "chair_left", x: 80, y: 120, dir: "down", kind: "guest" },
+    { id: "chair_right", x: 120, y: 124, dir: "down", kind: "guest" },
   ],
 
   spawns: [
@@ -105,13 +105,13 @@ export const office: RoomDef = {
   joinSpawns: 2,
 
   exits: [
-    { rect: { x: 112, y: WALL, w: 32, h: 10 }, to: "outside", spawn: 0, label: "GO OUTSIDE" },
+    { rect: { x: 112, y: WALL, w: 32, h: 10 }, to: "grove", spawn: 0, label: "GO OUTSIDE" },
   ],
 
   sayTriggers: [
     {
-      phrases: ["lets go outside", "let's go outside", "go outside", "outside?", "wanna go outside"],
-      to: "outside",
+      phrases: ["lets go outside", "let's go outside", "go outside", "outside?", "wanna go outside", "to the grove"],
+      to: "grove",
       spawn: 0,
       announce: "{name} TOOK EVERYONE OUTSIDE",
     },

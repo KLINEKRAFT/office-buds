@@ -127,6 +127,8 @@ export class Renderer {
     fade = 0,
     mood: Mood = "normal",
     burst: { kind: Burst; time: number } | null = null,
+    /** Whether the thing in the circle has been called up. */
+    summoned = false,
   ): void {
     const ctx = this.ctx;
     const base = camera.offset();
@@ -175,9 +177,34 @@ export class Renderer {
       });
     }
 
+    // The summoned thing stands at the head of the circle, depth sorted with everyone
+    // else so you can walk in front of it.
+    const summonSpot = room.def.summonAt;
+    if (summoned && summonSpot) {
+      const rect = room.sprites.wraith;
+      if (rect) {
+        const sx = summonSpot.x - cam.x;
+        const sy = summonSpot.y - cam.y;
+        items.push({
+          sortY: summonSpot.y,
+          draw: () => {
+            // Bobbing, and never quite solid.
+            const bob = Math.round(Math.sin(now / 420) * 2);
+            ctx.globalAlpha = 0.82;
+            drawSprite(ctx, room.atlas, rect, sx - Math.round(rect.w / 2), sy - rect.h + bob, false);
+            ctx.globalAlpha = 1;
+          },
+        });
+      }
+    }
+
     for (const player of players) {
       const asset = this.assets.characters[player.character];
       if (!asset) continue;
+      // Taken by the ceremony: you are drawn as the thing you became, not as yourself.
+      // Uses the pack's own wraith rather than any new art, and the name plate stays so
+      // it is obvious who is gone.
+      const ghost = player.ascended ? room.sprites.wraith : undefined;
       const speed = player.id === localId ? localSpeed : WALK_SPEED;
       const pose = poseFor(player, asset.meta, speed);
       const cx = Math.round(player.renderX) - cam.x;
@@ -194,6 +221,13 @@ export class Renderer {
       items.push({
         sortY: player.renderY,
         draw: () => {
+          if (ghost) {
+            const bob = Math.round(Math.sin(now / 380 + cx) * 2);
+            ctx.globalAlpha = 0.8;
+            drawSprite(ctx, room.atlas, ghost, cx - Math.round(ghost.w / 2), feetY - ghost.h + bob, false);
+            ctx.globalAlpha = 1;
+            return;
+          }
           this.drawShadow(cx, feetY);
           const dx = cx - FRAME / 2;
           const dy = feetY - FRAME + pose.bob;

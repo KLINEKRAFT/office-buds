@@ -29,9 +29,75 @@ export interface ChatMagic {
   exact?: boolean;
   /** Only fires for these characters. Omit for everyone. */
   only?: CharacterId[];
+  /**
+   * Only fires while standing in this zone of the current room. What turns a phrase into
+   * a rite: the words alone are not enough, you have to be on the stone.
+   */
+  where?: string;
 }
 
 export const CHAT_MAGIC: ChatMagic[] = [
+  /*
+   * ---- the grove ------------------------------------------------------------------
+   *
+   * The rite. Every one of these is gated three ways: only Colin, only in the grove
+   * (nothing else in the game has a `leader_stone` zone), and only while actually
+   * standing on the stone. Words alone do nothing, which is the entire point of it being
+   * a ceremony rather than a command.
+   *
+   * On the naming: this is a cartoon in a pixel wood, so the register here is ascension
+   * and being taken rather than anything more literal. It reads better and it is one
+   * edit to change - the words are just strings in this table.
+   */
+  {
+    phrases: ["let us begin", "the rite begins", "we begin", "begin the rite"],
+    only: ["colin"],
+    where: "leader_stone",
+    effect: "ritual",
+    announce: "THE RITE BEGINS",
+  },
+  {
+    phrases: ["i summon thee", "come forth", "rise from the stone", "answer me"],
+    only: ["colin"],
+    where: "leader_stone",
+    effect: "summon",
+    announce: "SOMETHING ANSWERS {name}",
+  },
+  {
+    phrases: ["take them", "they are yours", "claim them"],
+    only: ["colin"],
+    where: "leader_stone",
+    effect: "ascend_others",
+    announce: "{name} GIVES THEM UP",
+  },
+  {
+    phrases: ["we ascend", "we go together", "all of us"],
+    only: ["colin"],
+    where: "leader_stone",
+    effect: "ascend_all",
+    announce: "THEY ALL ASCEND",
+  },
+  {
+    phrases: ["rise", "come back", "i return you", "enough"],
+    only: ["colin"],
+    where: "leader_stone",
+    effect: "return_all",
+    announce: "{name} CALLS THEM BACK",
+  },
+  {
+    phrases: ["be gone", "begone", "banish"],
+    only: ["colin"],
+    where: "leader_stone",
+    effect: "banish",
+    announce: "IT SINKS BACK INTO THE STONE",
+  },
+  // Anyone can offer themselves. No stone required - that is rather the point.
+  {
+    phrases: ["i ascend", "take me", "i give myself"],
+    effect: "ascend_self",
+    announce: "{name} IS TAKEN",
+  },
+
   // ---- the lights ----------------------------------------------------------------
   {
     phrases: ["party time", "lets party", "party mode", "disco"],
@@ -130,11 +196,17 @@ export function normalizeSaid(text: string): string {
  * Phrases match on whole words, so "hi" fires on "hi there" but not on "this" - a
  * substring test made almost every message set something off.
  */
-export function matchChatMagic(text: string, character: CharacterId): ChatMagic | null {
+export function matchChatMagic(
+  text: string,
+  character: CharacterId,
+  /** Zone ids the speaker is standing in, for `where`-gated phrases. */
+  standingIn: readonly string[] = [],
+): ChatMagic | null {
   const bare = normalizeSaid(text);
   const said = ` ${bare} `;
   for (const magic of CHAT_MAGIC) {
     if (magic.only && !magic.only.includes(character)) continue;
+    if (magic.where && !standingIn.includes(magic.where)) continue;
     const hit = magic.exact
       ? magic.phrases.some((p) => bare === normalizeSaid(p))
       : magic.phrases.some((p) => said.includes(` ${normalizeSaid(p)} `));
