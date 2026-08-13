@@ -4,6 +4,8 @@ import { BitmapFont } from "../core/font";
 import { Camera } from "../core/camera";
 import type { StickView } from "../core/input";
 import {
+  CARRY_LIFT,
+  CARRY_LIFT_LOW,
   FRAME,
   MAX_SCALE,
   MIN_SCALE,
@@ -16,6 +18,13 @@ import type { Player } from "../types";
 import { drawSprite } from "../world/build";
 import type { BuiltRoom } from "../world/build";
 import { bubbleFade, drawBubble, drawNameTag } from "./bubble";
+import { drawConfetti, drawMood, shakeOffset, type Burst, type Mood } from "../effects";
+
+/** Keeps a camera offset inside the room, or centred when the room is the smaller. */
+function clampPan(v: number, roomSize: number, viewSize: number): number {
+  if (roomSize <= viewSize) return Math.round((roomSize - viewSize) / 2);
+  return Math.min(Math.max(v, 0), roomSize - viewSize);
+}
 
 /** Widths of each row of the 5-row character shadow, so it stays a crisp pixel blob. */
 const SHADOW_ROWS = [10, 14, 16, 14, 10];
@@ -116,9 +125,20 @@ export class Renderer {
     now: number,
     /** 0 = clear, 1 = fully black. Used to cover a room change. */
     fade = 0,
+    mood: Mood = "normal",
+    burst: { kind: Burst; time: number } | null = null,
   ): void {
     const ctx = this.ctx;
-    const cam = camera.offset();
+    const base = camera.offset();
+    // A shake moves the camera, not the world, so props and characters stay in register
+    // with each other and only the frame slides.
+    const jolt = burst?.kind === "shake" ? shakeOffset(burst.time) : { x: 0, y: 0 };
+    // Clamped back inside the room, or a shake against a wall flickers a bar of letterbox
+    // along that edge for the whole second.
+    const cam = {
+      x: clampPan(base.x + jolt.x, room.width, this.world.width),
+      y: clampPan(base.y + jolt.y, room.height, this.world.height),
+    };
     const viewW = this.world.width;
     const viewH = this.world.height;
 
@@ -130,7 +150,16 @@ export class Renderer {
     // ---- depth-sorted pass -------------------------------------------------
     const items: Drawable[] = [];
 
+    // Anything in somebody's hands is not on the floor. Derived fresh every frame from
+    // the players actually present, so it is always consistent with what is drawn over
+    // their heads and needs no separate bookkeeping.
+    const held = new Set<number>();
+    for (const p of players) {
+      if (p.carrying >= 0) held.add(p.carrying);
+    }
+
     for (const p of room.floorProps) {
+      if (p.propIndex >= 0 && held.has(p.propIndex)) continue;
       if (
         p.x + p.rect.w < cam.x - 8 ||
         p.x > cam.x + viewW + 8 ||
@@ -154,6 +183,14 @@ export class Renderer {
       const cx = Math.round(player.renderX) - cam.x;
       const feetY = Math.round(player.renderY) - cam.y;
 
+      const carried =
+        player.carrying >= 0 ? room.def.props[player.carrying]?.sprite : undefined;
+      const carriedRect = carried ? room.sprites[carried] : undefined;
+      // Where the hands actually are. A character with a lift clip holds it overhead;
+      // one without keeps their arms down, and an item floating above their head would
+      // read as levitating rather than carried, so it rides at chest height instead.
+      const holdY = asset.meta.clips.lift ? CARRY_LIFT : CARRY_LIFT_LOW;
+
       items.push({
         sortY: player.renderY,
         draw: () => {
@@ -168,6 +205,21 @@ export class Renderer {
             ctx.restore();
           } else {
             ctx.drawImage(asset.image, pose.sx, pose.sy, FRAME, FRAME, dx, dy, FRAME, FRAME);
+          }
+          // Held overhead, bottom-centred on the hands. Drawn with the carrier rather
+          // than as its own sortable item so it can never separate from them.
+          // Hidden for the length of the grab clip: the whole point of that animation is
+          // reaching down for the thing, which reads as nonsense if it is already in the
+          // air above them.
+          if (carriedRect && player.emote !== "pickup") {
+            drawSprite(
+              ctx,
+              room.atlas,
+              carriedRect,
+              cx - Math.round(carriedRect.w / 2),
+              feetY - holdY - carriedRect.h + pose.bob,
+              false,
+            );
           }
         },
       });
@@ -205,11 +257,34 @@ export class Renderer {
       const gone = bubbleFade(player.bubble, now);
       if (gone >= 1) continue;
       const cx = Math.round(player.renderX) - cam.x;
-      const headY = Math.round(player.renderY) - cam.y - FRAME;
+      let headY = Math.round(player.renderY) - cam.y - FRAME;
+      // Talking while holding the photocopier over your head: lift the bubble clear of
+      // it rather than letting the two overlap.
+      const carried =
+        player.carrying >= 0 ? room.def.props[player.carrying]?.sprite : undefined;
+      const carriedRect = carried ? room.sprites[carried] : undefined;
+      const hold = this.assets.characters[player.character]?.meta.clips.lift
+        ? CARRY_LIFT
+        : CARRY_LIFT_LOW;
+      if (carriedRect) headY = Math.min(headY, headY - (hold - FRAME) - carriedRect.h);
       ctx.globalAlpha = 1 - gone;
       drawBubble(ctx, this.font, player.bubble, cx, headY - 1);
       ctx.globalAlpha = 1;
     }
+
+    // ---- room effects, over everything but under the touch stick ----------------
+    drawMood(
+      ctx,
+      mood,
+      now / 1000,
+      viewW,
+      viewH,
+      players.map((p) => ({
+        x: Math.round(p.renderX) - cam.x,
+        y: Math.round(p.renderY) - cam.y,
+      })),
+    );
+    if (burst?.kind === "confetti") drawConfetti(ctx, burst.time, viewW, viewH);
 
     if (fade > 0) {
       ctx.globalAlpha = Math.min(1, fade);

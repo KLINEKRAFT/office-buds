@@ -59,7 +59,7 @@ export const outside: RoomDef = {
 
     // ---- the cottage, which is somehow the office ---------------------------
     { sprite: "cottage", x: 120, y: 150, solid: true },
-    { sprite: "barrel", x: 176, y: 152 },
+    { sprite: "barrel", x: 176, y: 152, takeable: true },
     { sprite: "bush", x: 74, y: 156 },
     { sprite: "lamp_post", x: 196, y: 196 },
 
@@ -67,9 +67,9 @@ export const outside: RoomDef = {
     { sprite: "market_stall", x: 320, y: 180, solid: true },
     { sprite: "barrel", x: 356, y: 184 },
     { sprite: "barrel", x: 372, y: 180 },
-    { sprite: "crystal_orb", x: 292, y: 176, bias: 20 },
-    { sprite: "staff", x: 350, y: 152 },
-    { sprite: "shield", x: 296, y: 196 },
+    { sprite: "crystal_orb", x: 292, y: 176, bias: 20, takeable: true },
+    { sprite: "staff", x: 350, y: 152, takeable: true },
+    { sprite: "shield", x: 296, y: 196, takeable: true },
     { sprite: "boulder", x: 452, y: 150 },
     { sprite: "bush", x: 420, y: 196 },
 
@@ -77,7 +77,7 @@ export const outside: RoomDef = {
     { sprite: "well", x: 300, y: 288, solid: true },
     { sprite: "lamp_post", x: 286, y: 258 },
     { sprite: "bush", x: 208, y: 262 },
-    { sprite: "mushroom", x: 196, y: 236 },
+    { sprite: "mushroom", x: 196, y: 236, takeable: true },
 
     // ---- woods, bottom left ------------------------------------------------------
     { sprite: "rogue", x: 78, y: 268 },
@@ -88,9 +88,9 @@ export const outside: RoomDef = {
     { sprite: "bush", x: 200, y: 348 },
 
     // ---- treasure corner, bottom right --------------------------------------------
-    { sprite: "sword", x: 396, y: 252 },
+    { sprite: "sword", x: 396, y: 252, takeable: true },
     { sprite: "chest_open", x: 428, y: 262 },
-    { sprite: "gold_pile", x: 446, y: 266 },
+    { sprite: "gold_pile", x: 446, y: 266, takeable: true },
     { sprite: "chest_closed", x: 362, y: 300 },
     { sprite: "boulder", x: 392, y: 344 },
     { sprite: "mushroom", x: 452, y: 322 },

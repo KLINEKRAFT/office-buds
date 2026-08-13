@@ -22,6 +22,8 @@ export interface NetHandlers {
   onChat(id: string, text: string, at: number): void;
   /** Somebody invited the room somewhere; everyone goes. */
   onGo(id: string, room: string, spawn: number, announce: string): void;
+  /** Somebody set the room off - lights, confetti, or emptying it. */
+  onEffect(id: string, effect: string): void;
   onStatus(status: NetStatus, detail?: string): void;
 }
 
@@ -31,6 +33,8 @@ export interface Net {
   disconnect(): void;
   /** Lossy and frequent. Implementations may drop these under load. */
   sendMove(state: PlayerState): void;
+  /** Room-wide effect: a mood the room sits in, or a one-shot burst. */
+  sendEffect(effect: string): void;
   /** Must not be dropped. */
   sendChat(text: string): void;
   /** Move everybody to another room. Must not be dropped. */

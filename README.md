@@ -21,14 +21,42 @@ is Colin, Michael, Alexis, Melanie and Tiffany; anyone else gets in as a guest.
 - **Desktop** — WASD or the arrow keys.
 - **CHAT** opens the composer. What you send floats above your head for a few seconds
   (longer messages linger longer) and your friend sees it in real time.
-- **WAVE**, **LIFT** and **LAPTOP** — emote buttons only appear for animations that
+- **WAVE**, **JUMP** and **LAPTOP** — emote buttons only appear for animations that
   character actually has art for, so a character with no wave sheet simply has no button.
 - **LOG** shows recent messages, so nothing is lost once a bubble fades.
+- **PICK UP** appears when you are standing next to something you can lift. You then
+  carry it over your head until you put it down, and everyone sees you holding it.
 - Walk onto a chair to sit in it, or in behind the desk to sit at it.
 - Walk out through the doorway to step outside on your own. Or say **"let's go outside"**
   and the whole room goes with you; say **"back to work"** out there to march everyone
   back in. The cottage is the way back in too.
 - The office code in the top-left copies (or opens the share sheet for) the invite link.
+
+### Say the magic words
+
+Some things you type do more than float over your head. `src/game/chatMagic.ts` is the
+whole list and adding one is a single line.
+
+| Say | What happens |
+| --- | --- |
+| party time | The lights go down and disco lamps sweep the room |
+| lights out | The lights go off. Everyone becomes a glow in the dark |
+| party over | The lights come back on |
+| leave | Everybody is turned out of the office |
+| earthquake | The room shakes |
+| congrats | Confetti |
+| hi, bye | You wave |
+| standup, coffee, deploy | A banner, for the people who need to know |
+
+Moods stick until somebody changes them; bursts play out and end. Both reach everyone in
+the room, and nothing outside it — walking out of a party does not take the lighting with
+you.
+
+The disruptive ones are `exact: true`, meaning the whole message has to be the phrase.
+That distinction was earned: as substrings, "leave" ended the session every time somebody
+said they had to go, "raise" rained confetti on anyone raising a ticket, and "status" and
+"coffee" kept a banner on screen through an entire standup. Anything that interrupts
+other people has to be typed deliberately.
 
 ## Running it
 
@@ -122,6 +150,22 @@ Sheets do not all come back from the generator standing on the floor of their 64
 some sit 15-20px high, which at 1/16 scale leaves a character hovering above their own
 shadow. The builder measures each character once and drops every one of their frames by
 the same amount, which closes the gap without disturbing the shared anchor.
+
+### Picking things up
+
+A prop marked `takeable` can be lifted. What makes this simple is that the entire world
+state lives in one replicated number: `PlayerState.carrying`, an index into the room's
+prop list. A takeable prop is drawn unless somebody standing in the room is carrying it,
+and everyone already receives everyone's carrying value on the movement heartbeat.
+
+That means there is no take/drop event to miss, nothing to replay for a late joiner, and
+no way for two clients to disagree about what is on the floor. It also means a dropped
+item returns to exactly where it started, which is the one thing given up for it — you
+can carry the photocopier around the office, but you cannot leave it somewhere else.
+
+Two people reaching for the same thing on the same tick both come away holding it for an
+instant; lowest player id keeps it, which both clients work out independently without
+having to agree on a clock.
 
 ### The room
 

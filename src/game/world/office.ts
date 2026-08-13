@@ -59,28 +59,28 @@ export const office: RoomDef = {
     { sprite: "chair_office", x: 40, y: 74 },
     { sprite: "desk", x: 40, y: 96, solid: true, collider: { x: 26, y: 90, w: 28, h: 6 } },
     { sprite: "monitor", x: 30, y: 90, bias: 7 },
-    { sprite: "keyboard", x: 46, y: 94, bias: 5 },
-    { sprite: "plant_tall", x: 12, y: 86 },
+    { sprite: "keyboard", x: 46, y: 94, bias: 5, takeable: true },
+    { sprite: "plant_tall", x: 12, y: 86, takeable: true },
 
     // ---- left wall: storage, and the printer nobody wants to sit next to ------------
     { sprite: "locker_mesh", x: 14, y: 132, solid: true },
     { sprite: "shelf_mesh", x: 22, y: 168, solid: true },
     { sprite: "copier", x: 16, y: 206, solid: true },
     { sprite: "printer", x: 48, y: 210, solid: true },
-    { sprite: "plant_bushy", x: 14, y: 234 },
+    { sprite: "plant_bushy", x: 14, y: 234, takeable: true },
 
     // ---- where the meeting happens -------------------------------------------------
     // Not solid on purpose: walking onto a chair is how you sit down.
     { sprite: "side_table", x: 100, y: 140, solid: true },
     { sprite: "tub_chair_grey", x: 80, y: 124 },
     { sprite: "tub_chair_tan", x: 120, y: 128 },
-    { sprite: "plant_small", x: 146, y: 112 },
+    { sprite: "plant_small", x: 146, y: 112, takeable: true },
 
     // ---- the far corner, where everyone stands around ------------------------------
     { sprite: "counter_white", x: 124, y: 186, solid: true },
     { sprite: "coffee_station", x: 116, y: 184, bias: 6 },
     { sprite: "water_cooler", x: 148, y: 212, solid: true },
-    { sprite: "board_stand", x: 88, y: 206 },
+    { sprite: "board_stand", x: 88, y: 206, takeable: true },
   ],
 
   /**

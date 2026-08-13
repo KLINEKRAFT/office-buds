@@ -51,9 +51,16 @@ export const CHAT_HISTORY_LIMIT = 60;
  */
 export const EMOTES: Array<{ clip: string; label: string; glyph: string }> = [
   { clip: "wave", label: "WAVE", glyph: "\u270B" },
-  { clip: "lift", label: "LIFT", glyph: "\u{1F4AA}" },
+  { clip: "jump", label: "JUMP", glyph: "\u{1F998}" },
   { clip: "laptop", label: "LAPTOP", glyph: "\u{1F4BB}" },
 ];
+
+/** How close your feet have to be to a prop's anchor before you can pick it up. */
+export const REACH_DIST = 26;
+/** How far above a carrier's feet a held item is drawn, arms overhead. */
+export const CARRY_LIFT = 39;
+/** The same, for a character with no lift clip: held at chest height, arms down. */
+export const CARRY_LIFT_LOW = 24;
 
 /** How long a room-change announcement stays on screen. */
 export const ANNOUNCE_MS = 3200;

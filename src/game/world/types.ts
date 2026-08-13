@@ -26,6 +26,12 @@ export interface PropDef {
   layer?: "wall" | "floor" | "ground";
   /** Draw order tiebreak for props sharing an anchor y. */
   bias?: number;
+  /**
+   * Can be picked up and carried. A taken prop stops being drawn and stops colliding;
+   * putting it down returns it to exactly this spot, which is what keeps the world state
+   * derivable from who is holding what rather than needing to be tracked separately.
+   */
+  takeable?: boolean;
 }
 
 /**

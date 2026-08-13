@@ -5,6 +5,7 @@ type Msg =
   | { t: "hello" | "hello_ack"; id: string; name: string; character: CharacterId }
   | { t: "bye"; id: string }
   | ({ t: "m"; id: string } & PlayerState)
+  | { t: "x"; id: string; effect: string }
   | { t: "c"; id: string; text: string; at: number }
   | { t: "g"; id: string; room: string; spawn: number; announce: string };
 
@@ -87,17 +88,26 @@ export class LocalNet implements Net {
           moving: msg.moving,
           emote: msg.emote,
           room: msg.room,
+          carrying: typeof msg.carrying === "number" ? msg.carrying : -1,
         });
         break;
       case "c":
         if (!this.known.has(msg.id)) return;
         this.handlers?.onChat(msg.id, msg.text, msg.at);
         break;
+      case "x":
+        if (!this.known.has(msg.id)) return;
+        this.handlers?.onEffect(msg.id, msg.effect);
+        break;
       case "g":
         if (!this.known.has(msg.id)) return;
         this.handlers?.onGo(msg.id, msg.room, msg.spawn, msg.announce);
         break;
     }
+  }
+
+  sendEffect(effect: string): void {
+    this.post({ t: "x", id: this.id, effect });
   }
 
   sendMove(state: PlayerState): void {

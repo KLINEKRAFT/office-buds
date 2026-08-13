@@ -530,39 +530,6 @@ button {
 }
 
 /* Entry screen: who you are about to walk in as. */
-.whoami {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--slate);
-  border: 2px solid var(--ink);
-  box-shadow:
-    inset 2px 2px 0 0 rgba(255, 255, 255, 0.14),
-    inset -2px -2px 0 0 var(--bevel-shade);
-  padding: 8px 10px;
-}
-
-.whoami__art {
-  background-repeat: no-repeat;
-  image-rendering: pixelated;
-  flex: none;
-}
-
-.whoami__text {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  color: var(--cream-dim);
-}
-
-.whoami__text strong {
-  font-size: 14px;
-  letter-spacing: 0.16em;
-  color: var(--cream);
-}
-
 /*
  * One small office is a portrait scene. Left to fill a landscape monitor it would sit
  * as a narrow strip of room in a wide field of nothing, so on a wide screen the play
@@ -580,5 +547,32 @@ button {
     right: auto;
     width: min(100vw, 74vh);
     transform: translateX(-50%);
+  }
+}
+
+.round--act {
+  background: var(--good);
+}
+
+/*
+ * With the contextual pick-up button the row can reach six. Wrapping it was worse than
+ * the problem - the second row sat over the chat log - so the buttons shrink instead and
+ * the row stays single-line down to a 360px phone.
+ */
+@media (max-width: 430px) {
+  .round {
+    width: 46px;
+    height: 46px;
+    font-size: 8px;
+  }
+
+  .round--chat {
+    width: 52px;
+    height: 52px;
+    font-size: 9px;
+  }
+
+  .round__glyph {
+    font-size: 15px;
   }
 }

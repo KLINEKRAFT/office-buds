@@ -48,9 +48,12 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [place, setPlace] = useState("");
+  const [evictedBy, setEvictedBy] = useState("");
   const [announce, setAnnounce] = useState("");
   const [emotes, setEmotes] = useState<Array<{ clip: string; label: string; glyph: string }>>([]);
+  const [reach, setReach] = useState<{ action: "take" | "put"; label: string } | null>(null);
   const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reachTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +77,18 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
             !cancelled &&
             setMessages((prev) => [...prev, m].slice(-CHAT_HISTORY_LIMIT)),
           onPlace: (name) => !cancelled && setPlace(name),
+          onEvicted: (byName) => {
+            if (cancelled) return;
+            // Somebody said the word. Everyone goes back to the title screen; rejoining
+            // is one tap, which is what keeps this funny rather than annoying.
+            setEvictedBy(byName);
+            // dispose, not stop: stopping only halts the render loop, leaving the socket
+            // open and presence still reporting us. Everyone who stayed would keep a
+            // motionless ghost of us for fifteen seconds, still holding whatever we had
+            // picked up, and would hear a join chime when we came back as a new id.
+            gameRef.current?.dispose();
+            gameRef.current = null;
+          },
           onAnnounce: (text) => {
             if (cancelled) return;
             setAnnounce(text);
@@ -91,6 +106,19 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
         game.start();
         setEmotes(game.emotes);
         setPhase("ready");
+        // Poll rather than push: whether something is within reach changes as you walk,
+        // and four times a second is far below what a thumb can notice while costing
+        // nothing next to the render loop.
+        reachTimer.current = setInterval(() => {
+          if (cancelled) return;
+          const next = gameRef.current?.reach ?? null;
+          // Only re-render when the offer actually changes. Without this, standing next
+          // to anything - or carrying it - re-rendered the whole HUD four times a second
+          // with an identical tree, competing with the render loop on a slow phone.
+          setReach((prev) =>
+            prev?.action === next?.action && prev?.label === next?.label ? prev : next,
+          );
+        }, 250);
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : "could not start the office");
@@ -101,6 +129,7 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
     return () => {
       cancelled = true;
       if (announceTimer.current) clearTimeout(announceTimer.current);
+      if (reachTimer.current) clearInterval(reachTimer.current);
       gameRef.current?.dispose();
       gameRef.current = null;
       game?.dispose();
@@ -157,6 +186,29 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
       </div>
 
       {phase === "loading" && <div className="loading">LOADING THE OFFICE...</div>}
+
+      {evictedBy && (
+        <div className="modal">
+          <div className="modal__box">
+            <div className="modal__bar">
+              <span>EVERYBODY OUT</span>
+            </div>
+            <div className="modal__body">
+              <p className="label">{evictedBy} cleared the room</p>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => window.location.reload()}
+              >
+                Go back in
+              </button>
+              <a className="btn btn--ghost" href="/" style={{ textAlign: "center", textDecoration: "none" }}>
+                Leave for good
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {phase === "error" && (
         <div className="loading">
@@ -222,6 +274,19 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
                 <span className="round__glyph">▤</span>
                 LOG
               </button>
+              {reach && (
+                <button
+                  type="button"
+                  className="round round--act"
+                  onClick={() => {
+                    gameRef.current?.toggleCarry();
+                    setReach(gameRef.current?.reach ?? null);
+                  }}
+                >
+                  <span className="round__glyph">{reach.action === "put" ? "\u{1F44C}" : "\u{1F91A}"}</span>
+                  {reach.label}
+                </button>
+              )}
               {emotes.map((e) => (
                 <button
                   key={e.clip}

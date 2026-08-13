@@ -63,7 +63,14 @@ export class SupabaseNet implements Net {
         moving: !!p.moving,
         emote: typeof p.emote === "string" ? p.emote : "",
         room: typeof p.room === "string" ? p.room : "office",
+        carrying: typeof p.carrying === "number" ? p.carrying : -1,
       });
+    });
+
+    channel.on("broadcast", { event: "x" }, ({ payload }) => {
+      const p = payload as { id?: string; effect?: string };
+      if (!p?.id || p.id === this.id || typeof p.effect !== "string") return;
+      this.handlers?.onEffect(p.id, p.effect);
     });
 
     channel.on("broadcast", { event: "g" }, ({ payload }) => {
@@ -136,6 +143,14 @@ export class SupabaseNet implements Net {
     const payload = { id: this.id, ...this.pending };
     this.pending = null;
     void this.channel.send({ type: "broadcast", event: "m", payload });
+  }
+
+  sendEffect(effect: string): void {
+    void this.channel?.send({
+      type: "broadcast",
+      event: "x",
+      payload: { id: this.id, effect },
+    });
   }
 
   sendMove(state: PlayerState): void {

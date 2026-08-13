@@ -11,6 +11,8 @@ export interface DrawProp {
   flip: boolean;
   /** Depth sort key. */
   sortY: number;
+  /** Index in the room's prop list if this one can be picked up, else -1. */
+  propIndex: number;
 }
 
 export interface BuiltRoom {
@@ -20,6 +22,8 @@ export interface BuiltRoom {
   wallHeight: number;
   /** The atlas this room's props are drawn from. */
   atlas: HTMLImageElement;
+  /** Sprite table for that atlas, so a carried prop can be looked up by name. */
+  sprites: Record<string, SpriteRect>;
   /** Pre-rendered ground, walls and wall-mounted props. Blitted once per frame. */
   background: HTMLCanvasElement;
   /** Depth-sorted props that characters can walk in front of and behind. */
@@ -150,6 +154,10 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
 
   // ---- props ---------------------------------------------------------------
   const floorProps: DrawProp[] = [];
+  // Keep each prop's index in the room's own list: it is the id a carried item is
+  // referred to by over the network, so it has to survive the layer sort below.
+  const indexOf = new Map<PropDef, number>();
+  def.props.forEach((p, i) => indexOf.set(p, i));
   const ordered = [...def.props].sort((a, b) => layerRank(a) - layerRank(b));
 
   for (const p of ordered) {
@@ -166,10 +174,13 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
         y: drawY,
         flip: p.flip ?? false,
         sortY: p.y + (p.bias ?? 0),
+        propIndex: p.takeable ? (indexOf.get(p) ?? -1) : -1,
       });
     }
 
-    if (p.solid) colliders.push(p.collider ?? autoCollider(p, rect));
+    // A takeable prop never blocks: it would leave an invisible wall behind once
+    // somebody picked it up.
+    if (p.solid && !p.takeable) colliders.push(p.collider ?? autoCollider(p, rect));
   }
 
   floorProps.sort((a, b) => a.sortY - b.sortY);
@@ -188,6 +199,7 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
     height,
     wallHeight: def.wallHeight,
     atlas: source.image,
+    sprites: source.sprites,
     background,
     floorProps,
     colliders,

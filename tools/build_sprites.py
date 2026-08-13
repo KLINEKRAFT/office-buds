@@ -78,6 +78,7 @@ CHARACTERS: dict[str, dict] = {
             # Ends with both arms raised overhead. Held, so he stands there holding it up
             # until he moves - the pose an item gets drawn into later.
             Clip("lift", "Colin_lift.png", tuple(range(8)), 9, loop=False),
+            Clip("jump", "Colin_front_jump_sheet.png", tuple(range(8)), 12, loop=False),
         ],
     },
     "michael": {
