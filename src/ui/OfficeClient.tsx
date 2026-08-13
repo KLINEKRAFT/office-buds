@@ -56,6 +56,10 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
   const [announce, setAnnounce] = useState("");
   const [emotes, setEmotes] = useState<EmoteDef[]>([]);
   const [reach, setReach] = useState<{ action: "take" | "put"; label: string } | null>(null);
+  // Which room you are standing in. On a floor this size it is the difference between
+  // knowing where you are and wandering.
+  const [here, setHere] = useState<string | null>(null);
+  const [zoomedOut, setZoomedOut] = useState(false);
   const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reachTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -122,6 +126,8 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
           setReach((prev) =>
             prev?.action === next?.action && prev?.label === next?.label ? prev : next,
           );
+          const room = gameRef.current?.here ?? null;
+          setHere((prev) => (prev === room ? prev : room));
         }, 250);
       } catch (e) {
         if (cancelled) return;
@@ -227,6 +233,7 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
             <button type="button" className="chip chip--button" onClick={invite}>
               {shared ? "LINK COPIED" : `${place || "OFFICE"} \u00B7 ${roomCode}`}
             </button>
+            {here && <span className="chip chip--place">{here}</span>}
           </div>
 
           <div className="hud__topright">
@@ -296,6 +303,15 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
               >
                 <span className="round__glyph">▤</span>
                 LOG
+              </button>
+              <button
+                type="button"
+                className={`round${zoomedOut ? " round--on" : ""}`}
+                onClick={() => setZoomedOut(gameRef.current?.toggleZoom() ?? false)}
+                aria-pressed={zoomedOut}
+              >
+                <span className="round__glyph">{zoomedOut ? "\u{1F50D}" : "\u{1F5FA}"}</span>
+                {zoomedOut ? "CLOSE UP" : "WHOLE FLOOR"}
               </button>
               {reach && (
                 <button

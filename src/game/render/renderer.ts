@@ -65,6 +65,12 @@ export class Renderer {
   debugColliders = false;
   /** Forces a display scale instead of deriving one; set with ?scale=N. */
   scaleOverride = 0;
+  /**
+   * Pulls the camera back until the whole room fits. Deliberately allowed below
+   * MIN_SCALE - at 1x a character is 40 screen px, which is small but perfectly legible,
+   * and being able to see the entire floor at once is the whole point of the button.
+   */
+  zoomOut = false;
   /** Roughly how many world px to show vertically. Rooms may override the default. */
   targetViewH = TARGET_VIEW_H;
 
@@ -104,10 +110,16 @@ export class Renderer {
     this.dpr = Math.min(window.devicePixelRatio || 1, 3);
     const fill = Math.ceil(Math.max(cssW / roomW, cssH / roomH) * 0.93);
     const target = Math.round(cssH / this.targetViewH);
+    // Zoomed out, the only demand is that the room fits, so take the smaller of the two
+    // axes and floor it. Everything else takes the larger of "show about this much" and
+    // "fill the screen" - see the note above.
+    const fit = Math.max(1, Math.min(Math.floor(cssW / roomW), Math.floor(cssH / roomH)));
     this.scale =
       this.scaleOverride > 0
         ? this.scaleOverride
-        : Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.max(target, fill)));
+        : this.zoomOut
+          ? fit
+          : Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.max(target, fill)));
 
     // Floor, not ceil: the canvas must never be wider than the viewport, or the browser
     // clips a half pixel off each edge and the outermost column goes soft. Rounding down
@@ -321,6 +333,8 @@ export class Renderer {
       placed.push(box());
       drawNameTag(ctx, this.fontSmall, player.name, cx, y);
     }
+    this.drawOffscreenMarkers(players, localId, cam, viewW, viewH);
+
     for (const player of sorted) {
       if (!player.bubble) continue;
       const gone = bubbleFade(player.bubble, now);
@@ -375,6 +389,71 @@ export class Renderer {
     // ---- one scaled blit ---------------------------------------------------
     this.display.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.display.drawImage(this.world, 0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  /**
+   * Arrows at the edge of the screen pointing at anybody you cannot see.
+   *
+   * The floor is bigger than the screen now, so "where is everyone" stopped being
+   * obvious the moment the office grew a second room. An arrow on the rim with a name
+   * under it answers it without a map, without anything on the wire, and without taking
+   * up any space at all when everybody is already in shot.
+   *
+   * The arrow is clamped to the rim of the view and points along the line to the player,
+   * so walking toward it works.
+   */
+  private drawOffscreenMarkers(
+    players: Player[],
+    localId: string,
+    cam: { x: number; y: number },
+    viewW: number,
+    viewH: number,
+  ): void {
+    const ctx = this.ctx;
+    const PAD = 9; // keeps the whole arrow and its name inside the frame
+    for (const player of players) {
+      if (player.id === localId) continue;
+      const sx = Math.round(player.renderX) - cam.x;
+      const sy = Math.round(player.renderY) - cam.y;
+      // A character is 40px tall, so somebody whose feet are just off the bottom is still
+      // half on screen. Only mark people who are genuinely out of shot.
+      if (sx >= -4 && sx <= viewW + 4 && sy >= -8 && sy <= viewH + 40) continue;
+
+      const cx = viewW / 2;
+      const cy = viewH / 2;
+      const dx = sx - cx;
+      const dy = sy - cy;
+      const len = Math.hypot(dx, dy) || 1;
+      // Push out to the rim along the line to them, then clamp back inside the padding.
+      const ex = Math.min(Math.max(cx + (dx / len) * viewW, PAD), viewW - PAD);
+      const ey = Math.min(Math.max(cy + (dy / len) * viewH, PAD + 4), viewH - PAD - 6);
+      const ax = Math.round(ex);
+      const ay = Math.round(ey);
+
+      // A four-row triangle, drawn by hand so it stays a crisp pixel shape at any scale.
+      const ux = dx / len;
+      const uy = dy / len;
+      ctx.fillStyle = PALETTE.cream;
+      for (let i = 0; i < 5; i++) {
+        const w = 5 - i;
+        const px = Math.round(ax + ux * (4 - i) - (uy === 0 ? 0 : 0));
+        const py = Math.round(ay + uy * (4 - i));
+        // Widen across the direction of travel rather than always horizontally, so the
+        // arrow reads as pointing sideways when somebody is off to the left or right.
+        if (Math.abs(ux) > Math.abs(uy)) {
+          ctx.fillRect(px, py - w, 1, w * 2);
+        } else {
+          ctx.fillRect(px - w, py, w * 2, 1);
+        }
+      }
+      ctx.fillStyle = PALETTE.ink;
+      ctx.fillRect(ax - 1, ay - 1, 2, 2);
+
+      const label = player.name;
+      const w = this.fontSmall.measure(label);
+      const lx = Math.min(Math.max(ax, w / 2 + 1), viewW - w / 2 - 1);
+      drawNameTag(ctx, this.fontSmall, label, lx, Math.min(ay + 6, viewH - this.fontSmall.lineHeight));
+    }
   }
 
   /**

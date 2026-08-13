@@ -211,6 +211,8 @@ export class Game {
         mood: () => this.mood,
         summoned: () => this.summoned,
         reach: () => this.reach,
+        here: () => this.here,
+        zoomedOut: () => this.zoomedOut,
         place: (x: number, y: number) => {
           this.local.x = this.local.renderX = x;
           this.local.y = this.local.renderY = y;
@@ -851,6 +853,29 @@ export class Game {
   /** Emote buttons this player can offer - their own art, or a synthesised stand-in. */
   get emotes(): EmoteDef[] {
     return emotesFor(this.assets.characters[this.local.character].meta);
+  }
+
+  /**
+   * The name of the room the local player is standing in, for the HUD.
+   *
+   * First match wins, so a room's zones are ordered small-and-specific before
+   * large-and-general - the lift before the hallway it sits in.
+   */
+  get here(): string | null {
+    const body = bodyRect(this.local.x, this.local.y);
+    const zone = (this.room.def.zones ?? []).find((z) => overlaps(body, z.rect));
+    return zone?.label ?? null;
+  }
+
+  /** Pulls the camera back until the whole floor fits, and back again. */
+  toggleZoom(): boolean {
+    this.renderer.zoomOut = !this.renderer.zoomOut;
+    this.handleResize();
+    return this.renderer.zoomOut;
+  }
+
+  get zoomedOut(): boolean {
+    return this.renderer.zoomOut;
   }
 
   /** Called when a text field takes focus, so held keys do not stick. */
