@@ -14,10 +14,10 @@
  * upscales with the same chunky pixels as the art and costs no assets.
  */
 
-export type Mood = "normal" | "party" | "dark";
+export type Mood = "normal" | "party" | "dark" | "ritual";
 export type Burst = "shake" | "confetti";
 
-export const MOODS: readonly Mood[] = ["normal", "party", "dark"];
+export const MOODS: readonly Mood[] = ["normal", "party", "dark", "ritual"];
 export const BURSTS: readonly Burst[] = ["shake", "confetti"];
 
 export function isMood(v: string): v is Mood {
@@ -74,15 +74,29 @@ export function drawMood(
 ): void {
   if (mood === "normal") return;
 
-  const dim = mood === "dark" ? 0.88 : 0.42;
-  ctx.fillStyle = mood === "dark" ? "#05050c" : "#0d0a1e";
+  const dim = mood === "dark" ? 0.88 : mood === "ritual" ? 0.62 : 0.42;
+  ctx.fillStyle =
+    mood === "dark" ? "#05050c" : mood === "ritual" ? "#0a0f0a" : "#0d0a1e";
   ctx.globalAlpha = dim;
   ctx.fillRect(0, 0, w, h);
   ctx.globalAlpha = 1;
 
   ctx.globalCompositeOperation = "lighter";
 
-  if (mood === "dark") {
+  if (mood === "ritual") {
+    // Candlelight: a slow green wash with a flicker that never quite repeats, because
+    // two sine waves at unrelated speeds beat against each other instead of looping.
+    const flicker = 0.13 + 0.05 * Math.sin(t * 9.1) + 0.03 * Math.sin(t * 3.7);
+    ctx.fillStyle = `rgba(80,190,120,${Math.max(0.06, flicker)})`;
+    ctx.fillRect(0, 0, w, h);
+    for (const l of lights) {
+      const g = ctx.createRadialGradient(l.x, l.y - 16, 2, l.x, l.y - 16, 30);
+      g.addColorStop(0, "rgba(150,255,180,0.30)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(l.x - 30, l.y - 46, 60, 60);
+    }
+  } else if (mood === "dark") {
     // A little light left on each person, or the room is just a black rectangle and
     // nobody can tell the difference between that and a crash.
     for (const l of lights) {

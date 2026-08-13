@@ -65,6 +65,7 @@ export class SupabaseNet implements Net {
         emote: typeof p.emote === "string" ? p.emote : "",
         room: typeof p.room === "string" ? p.room : "office",
         carrying: typeof p.carrying === "number" ? p.carrying : -1,
+        ascended: !!p.ascended,
       });
     });
 

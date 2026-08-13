@@ -11,10 +11,11 @@ import type { CharacterId } from "./types";
  */
 
 /**
- * Which seat you arrive in. This is only ever about furniture - it is not a job title
- * and is never shown to anyone.
+ * Which place you arrive in. Not a job title and never shown to anyone - it only says
+ * which spot a room puts you in, whether that is the desk in the office or the stone at
+ * the head of the circle in the grove.
  */
-export type SeatKind = "desk" | "sofa";
+export type SeatKind = "lead" | "guest";
 
 export interface CastMember {
   /** Canonical display name, shown on the name plate. */
@@ -26,11 +27,11 @@ export interface CastMember {
 }
 
 export const CAST: CastMember[] = [
-  { name: "COLIN", character: "colin", seat: "desk" },
-  { name: "MICHAEL", aliases: ["MIKE"], character: "michael", seat: "sofa" },
-  { name: "ALEXIS", aliases: ["LEX"], character: "alexis", seat: "sofa" },
-  { name: "MELANIE", aliases: ["MEL"], character: "melanie", seat: "sofa" },
-  { name: "TIFFANY", aliases: ["TIFF"], character: "tiffany", seat: "sofa" },
+  { name: "COLIN", character: "colin", seat: "lead" },
+  { name: "MICHAEL", aliases: ["MIKE"], character: "michael", seat: "guest" },
+  { name: "ALEXIS", aliases: ["LEX"], character: "alexis", seat: "guest" },
+  { name: "MELANIE", aliases: ["MEL"], character: "melanie", seat: "guest" },
+  { name: "TIFFANY", aliases: ["TIFF"], character: "tiffany", seat: "guest" },
 ];
 
 /** Anyone not on the list still gets in, as a guest wearing this character. */
@@ -51,7 +52,7 @@ export function castFor(rawName: string): CastMember {
     if (member.name === name) return member;
     if (member.aliases?.some((a) => normalize(a) === name)) return member;
   }
-  return { name: name || "GUEST", character: UNKNOWN_CHARACTER, seat: "sofa" };
+  return { name: name || "GUEST", character: UNKNOWN_CHARACTER, seat: "guest" };
 }
 
 /** True when the typed name matches somebody on the list, for entry-screen feedback. */

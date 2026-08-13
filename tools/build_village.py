@@ -205,8 +205,60 @@ def water_tile(seed: int) -> Image.Image:
     return im
 
 
+def ritual_circle() -> Image.Image:
+    """
+    The chalk ring the ceremony happens inside.
+
+    Drawn as an ELLIPSE rather than a circle: the game looks down on the ground at an
+    angle, so a true circle painted on the floor reads as a hoop standing upright. The
+    2:1.5 squash is what makes it lie flat.
+
+    Authored rather than imported because nothing in the pack is a ground marking, and a
+    ring is a handful of ellipse calls - far less work than making an imported patch tile
+    against grass.
+    """
+    w, h = 104, 74
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+
+    chalk = (214, 206, 186, 210)
+    chalk_dim = (176, 166, 148, 150)
+    inner = (198, 188, 168, 120)
+
+    d.ellipse([1, 1, w - 2, h - 2], outline=chalk, width=2)
+    d.ellipse([9, 7, w - 10, h - 8], outline=chalk_dim, width=1)
+
+    # Points of the compass, marked with short spokes between the two rings.
+    import math
+
+    cx, cy = (w - 1) / 2, (h - 1) / 2
+    for i in range(8):
+        a = (i / 8) * math.tau
+        x0, y0 = cx + math.cos(a) * (w / 2 - 9), cy + math.sin(a) * (h / 2 - 8)
+        x1, y1 = cx + math.cos(a) * (w / 2 - 3), cy + math.sin(a) * (h / 2 - 3)
+        d.line([x0, y0, x1, y1], fill=chalk_dim, width=1)
+
+    # A faint star across the middle, kept thin so it never fights the characters
+    # standing on top of it.
+    for i in range(5):
+        a0 = (i / 5) * math.tau - math.tau / 4
+        a1 = ((i + 2) / 5) * math.tau - math.tau / 4
+        d.line(
+            [
+                cx + math.cos(a0) * (w / 2 - 11),
+                cy + math.sin(a0) * (h / 2 - 10),
+                cx + math.cos(a1) * (w / 2 - 11),
+                cy + math.sin(a1) * (h / 2 - 10),
+            ],
+            fill=inner,
+            width=1,
+        )
+    return im
+
+
 def main() -> None:
     sprites: dict[str, Image.Image] = {}
+    sprites["ritual_circle"] = ritual_circle()
 
     for key, (fname, height) in PROPS.items():
         sprites[key] = trim(crisp(Image.open(os.path.join(SRC, fname)), height))

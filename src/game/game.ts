@@ -36,7 +36,7 @@ export interface GameOptions {
   roomCode: string;
   name: string;
   character: CharacterId;
-  /** Decides where you land: Colin gets the desk, everyone else the sofa. */
+  /** Decides where you land: Colin leads, everyone else joins. */
   seat: SeatKind;
   startRoom?: string;
   onChat(message: ChatMessage): void;
@@ -114,6 +114,8 @@ export class Game {
   private mood: Mood = "normal";
   /** One-shot effect and how long it has been running, or null. */
   private burst: { kind: Burst; time: number } | null = null;
+  /** Whether the thing in the circle has been called up. */
+  private summoned = false;
 
   private constructor(
     private readonly opts: GameOptions,
@@ -138,6 +140,7 @@ export class Game {
       emote: "",
       room: room.def.id,
       carrying: -1,
+      ascended: false,
       animTime: 0,
       emoteTime: 0,
       bubble: null,
@@ -201,6 +204,7 @@ export class Game {
           emote: "",
           room: this.local.room,
           carrying: -1,
+          ascended: false,
           animTime: 0,
           emoteTime: 0,
           bubble: null,
@@ -223,6 +227,7 @@ export class Game {
         p.moving = state.moving;
         p.room = state.room;
         p.carrying = state.carrying;
+        p.ascended = state.ascended;
         p.lastSeen = Date.now();
         if (state.emote && state.emote !== p.emote) {
           p.emote = state.emote;
@@ -281,6 +286,47 @@ export class Game {
       this.opts.onEvicted(byName);
       return;
     }
+    if (effect === "summon") {
+      this.summoned = true;
+      this.mood = "ritual";
+      this.audio.leave();
+      return;
+    }
+    if (effect === "banish") {
+      this.summoned = false;
+      this.mood = "normal";
+      return;
+    }
+    // Ascension is per-player and replicated, so the effect only says WHO. Everyone runs
+    // this and reaches the same answer; nobody has to be told twice.
+    if (effect === "ascend_self") {
+      // The speaker's own flag only. Everyone else runs this too and changes nothing,
+      // which keeps one code path for local and remote.
+      if (byName === this.local.name) {
+        this.local.ascended = true;
+        this.lastSent = null;
+      }
+      this.mood = "ritual";
+      this.audio.leave();
+      return;
+    }
+    if (effect === "ascend_all" || effect === "ascend_others" || effect === "return_all") {
+      const rising = effect === "return_all";
+      for (const p of this.players.values()) {
+        if (p.room !== this.local.room) continue;
+        if (effect === "ascend_others" && p.name === byName) continue;
+        // Only our own flag is ours to send; a peer's arrives on their own heartbeat.
+        if (p.id === this.local.id) {
+          p.ascended = !rising;
+          this.lastSent = null;
+        }
+      }
+      // The lights follow the rite: taking somebody drops the grove into candlelight even
+      // if nobody said the opening words, and calling them back brings the day up again.
+      this.mood = rising ? "normal" : "ritual";
+      this.audio.join();
+      return;
+    }
     if (isMood(effect)) {
       this.mood = effect;
       return;
@@ -296,6 +342,12 @@ export class Game {
   private fireEffect(effect: string, byName: string): void {
     this.net.sendEffect(effect);
     this.applyEffect(effect, byName);
+  }
+
+  /** Zone ids the local player is standing in, for `where`-gated phrases. */
+  private standingIn(): string[] {
+    const body = bodyRect(this.local.x, this.local.y);
+    return (this.room.def.zones ?? []).filter((z) => overlaps(body, z.rect)).map((z) => z.id);
   }
 
   private reportPeers(): void {
@@ -367,6 +419,8 @@ export class Game {
     p.moving = false;
     p.emote = "";
     p.carrying = -1;
+    p.ascended = false;
+    this.summoned = false;
     // Lighting belongs to the room you left, not to you. Without this, walking out of a
     // party leaves the village lit by disco lamps that nobody outside switched on.
     this.mood = "normal";
@@ -440,6 +494,7 @@ export class Game {
       this.fade,
       this.mood,
       this.burst,
+      this.summoned,
     );
   }
 
@@ -473,7 +528,9 @@ export class Game {
 
   private updateLocal(dt: number): void {
     const p = this.local;
-    const v = this.input.vector();
+    // Whatever the ceremony took does not walk around. Being unable to move is most of
+    // what makes it land; the leader saying "rise" is what gives you your legs back.
+    const v = p.ascended ? { x: 0, y: 0 } : this.input.vector();
     const mag = Math.hypot(v.x, v.y);
     this.localSpeed = mag * WALK_SPEED;
 
@@ -601,6 +658,7 @@ export class Game {
       emote: p.emote,
       room: p.room,
       carrying: p.carrying,
+      ascended: p.ascended,
     };
     const prev = this.lastSent;
     const now = performance.now();
@@ -611,6 +669,7 @@ export class Game {
       prev.emote !== state.emote ||
       prev.room !== state.room ||
       prev.carrying !== state.carrying ||
+      prev.ascended !== state.ascended ||
       Math.abs(prev.x - state.x) > 0.4 ||
       Math.abs(prev.y - state.y) > 0.4;
 
@@ -649,7 +708,7 @@ export class Game {
 
     // Saying certain things sets something off wherever you are - an animation, a
     // banner, or both. Room changes are handled separately, just below.
-    const magic = matchChatMagic(text, this.local.character);
+    const magic = matchChatMagic(text, this.local.character, this.standingIn());
     if (magic) {
       if (magic.emote) this.emote(magic.emote);
       if (magic.announce) {

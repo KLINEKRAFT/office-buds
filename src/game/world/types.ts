@@ -139,6 +139,8 @@ export interface RoomDef {
    * camera than a big floor plan; leaving it unset uses the global default.
    */
   targetViewH?: number;
+  /** Where a summoned thing appears, if this room can be made to produce one. */
+  summonAt?: Vec2;
   zones?: ZoneDef[];
   exits?: ExitDef[];
   sayTriggers?: SayTrigger[];

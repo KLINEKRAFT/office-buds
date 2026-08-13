@@ -1,7 +1,7 @@
 # Office Buds
 
-A tiny retro office where two friends can hang out — and a village outside it, for
-when the office gets old.
+A tiny retro office where friends can hang out — and a grove outside it, for the kind of
+meeting that does not belong indoors.
 
 One small office with one desk. Open the game and you get a link; send it to a friend and
 they type their first name to walk in as themselves. Colin ends up at the desk and
@@ -27,9 +27,9 @@ is Colin, Michael, Alexis, Melanie and Tiffany; anyone else gets in as a guest.
 - **PICK UP** appears when you are standing next to something you can lift. You then
   carry it over your head until you put it down, and everyone sees you holding it.
 - Walk onto a chair to sit in it, or in behind the desk to sit at it.
-- Walk out through the doorway to step outside on your own. Or say **"let's go outside"**
-  and the whole room goes with you; say **"back to work"** out there to march everyone
-  back in. The cottage is the way back in too.
+- Walk out through the doorway to reach the grove on your own. Or say **"let's go
+  outside"** and the whole room goes with you; say **"back to work"** out there to march
+  everyone back in. The cottage is the way back.
 - The office code in the top-left copies (or opens the share sheet for) the invite link.
 
 ### Say the magic words
@@ -47,6 +47,8 @@ whole list and adding one is a single line.
 | congrats | Confetti |
 | hi, bye | You wave |
 | standup, coffee, deploy | A banner, for the people who need to know |
+
+Out in the grove there is a second set, and those are gated — see *The grove* below.
 
 Moods stick until somebody changes them; bursts play out and end. Both reach everyone in
 the room, and nothing outside it — walking out of a party does not take the lighting with
@@ -91,7 +93,7 @@ src/game/
   config.ts             every tuning knob in one file
   game.ts               owns the loop and ties the pieces together
   core/                 assets, bitmap font, input, camera, animation, audio
-  world/                room format, the office, the village, collision, room builder
+  world/                room format, the office, the grove, collision, room builder
   render/               renderer, speech bubbles, name plates
   net/                  transport interface + Supabase and same-browser drivers
 tools/                  Python art pipeline (run only when the source art changes)
@@ -150,6 +152,32 @@ Sheets do not all come back from the generator standing on the floor of their 64
 some sit 15-20px high, which at 1/16 scale leaves a character hovering above their own
 shadow. The builder measures each character once and drops every one of their frames by
 the same amount, which closes the gap without disturbing the shared anchor.
+
+### The grove
+
+Outside used to be a whole village. Nobody explored it — they stood in it and talked, and
+480x384 of map meant most of that happened off each other's screens. It is now one
+clearing sized the same way the office is, so a ceremony has an audience.
+
+The rite is gated three ways, and all three matter. `only: ["colin"]` restricts the words
+to one character; `where: "leader_stone"` restricts them to a zone that exists in no other
+room; and the zone is the stone at the head of the circle. Saying the words from the
+treeline does nothing. That gating is the whole difference between a ceremony and a
+command, and it is three fields on a table entry:
+
+```ts
+{ phrases: ["i summon thee"], only: ["colin"], where: "leader_stone", effect: "summon" }
+```
+
+Being taken by the rite is `PlayerState.ascended` — replicated on the heartbeat for the
+same reason `carrying` is, so somebody walking into the grove late sees exactly who is
+still standing. The taken are drawn as the pack's own wraith, keep their name plate, and
+cannot walk until the leader calls them back. No new character art: the wraith, the orb,
+the altar stone and the braziers were all already in the village pack, unused.
+
+The chalk ring is the one authored piece, in `tools/build_village.py`. It is an ellipse
+rather than a circle — the game looks down on the ground at an angle, so a true circle
+painted on the floor reads as a hoop standing upright.
 
 ### Picking things up
 

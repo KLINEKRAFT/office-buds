@@ -49,6 +49,13 @@ export interface PlayerState {
    * a late joiner and no separate take/drop event can be missed.
    */
   carrying: number;
+  /**
+   * Taken by the ceremony. Replicated rather than broadcast for the same reason
+   * `carrying` is: everyone already receives it on the heartbeat, so a late joiner walks
+   * into the grove and sees exactly who is still standing without anything being
+   * replayed at them.
+   */
+  ascended: boolean;
 }
 
 export interface Player extends PlayerState {

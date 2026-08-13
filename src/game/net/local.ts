@@ -92,6 +92,7 @@ export class LocalNet implements Net {
           emote: msg.emote,
           room: msg.room,
           carrying: typeof msg.carrying === "number" ? msg.carrying : -1,
+          ascended: !!msg.ascended,
         });
         break;
       case "c":
