@@ -229,6 +229,7 @@ export class Game {
             x: Math.round(p.x),
             y: Math.round(p.y),
             emote: p.emote,
+            dir: p.dir,
             running: p.running,
             carrying: p.carrying,
             ascended: p.ascended,
@@ -236,7 +237,7 @@ export class Game {
             room: p.room,
             isLocal: p.id === this.local.id,
           })),
-        emotes: () => this.emotes.map((e) => e.clip),
+        emotes: () => this.emotes.map((e) => ({ clip: e.clip, label: e.label })),
         mood: () => this.mood,
         summoned: () => this.summoned,
         reach: () => this.reach,
@@ -1054,6 +1055,19 @@ export class Game {
       ? this.room.def.props[this.local.carrying]?.sprite ?? ""
       : "";
     this.grudge = null;
+    // Swing first. The victim's topple eases in over a third of a second, so the punch
+    // and the fall overlap rather than the body dropping before the arm moves.
+    const victim = this.players.get(victimId);
+    if (victim) {
+      this.local.dir = Math.abs(victim.x - this.local.x) >= Math.abs(victim.y - this.local.y)
+        ? victim.x < this.local.x
+          ? "left"
+          : "right"
+        : victim.y < this.local.y
+          ? "up"
+          : "down";
+    }
+    this.emote("attack");
     this.fireEffect(doomEffect(victimId, cause, held), this.local.name);
   }
 

@@ -61,7 +61,12 @@ export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pos
   }
 
   if (emote?.kind === "art") {
-    clipName = emote.name;
+    // A punch is drawn from the front and from the side, like the walk is. "attack" is
+    // the front one and the name capability detection looks for; this picks the profile
+    // view when that is what you are showing, and mirrors it for left as usual.
+    const side = suffix(player.dir) === "side";
+    clipName =
+      emote.name === "attack" && side && meta.clips.attack_side ? "attack_side" : emote.name;
     time = player.emoteTime;
   } else if (player.carrying >= 0 && !player.moving && meta.clips.lift) {
     // Standing still holding something: hold the last frame of the lift, which ends with

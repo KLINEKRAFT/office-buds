@@ -7,4 +7,4 @@
  *
  * DO NOT EDIT. Run `npm run assets`.
  */
-export const ASSET_VERSION = "c888a88f790c";
+export const ASSET_VERSION = "a786de739f14";

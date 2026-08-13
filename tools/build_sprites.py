@@ -82,6 +82,19 @@ CHARACTERS: dict[str, dict] = {
             # Ten frames of a side run. The file has been sitting here since the first
             # batch, named for a front view it does not contain, wired to nothing.
             Clip("run_side", "Colin_front_front_run_run_sheet.png", tuple(range(10)), 14),
+            # Throwing a punch. "attack" is the front view and is also what capability
+            # detection looks for; poseFor swaps in attack_side when facing sideways.
+            # The authored left-facing sheet is not packed - every other side clip in this
+            # game is drawn facing right and mirrored, and 8 more frames on an atlas that
+            # has already outgrown a palette is a poor trade for a mirror we do anyway.
+            Clip("attack", "Colin_front_attack_sheet.png", tuple(range(8)), 13, loop=False),
+            Clip(
+                "attack_side",
+                "Colin_front_right_idle_attack_right_sheet.png",
+                tuple(range(8)),
+                13,
+                loop=False,
+            ),
         ],
     },
     "michael": {
