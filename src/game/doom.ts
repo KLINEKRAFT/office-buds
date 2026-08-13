@@ -21,7 +21,11 @@
 export interface Doom {
   /** Shown to everyone, after the victim's name: "MICHAEL <label>". */
   label: string;
-  /** Shown on the button. Kept short - it sits in a tray on a phone. */
+  /**
+   * Shown on the button. Nine characters is what fits: the tray is a grid of 68px
+   * buttons at 8px, and "EMBARRASSED" came out as "EMBARRASSE". Checked in the tests,
+   * because a clipped word is the kind of thing you stop seeing after a day.
+   */
   short: string;
 }
 
@@ -34,42 +38,64 @@ export const DOOMS: Doom[] = [
   { short: "SYNERGY", label: "WAS SYNERGISED TO DEATH" },
   { short: "REVIEW", label: "DID NOT SURVIVE THE ANNUAL REVIEW" },
   { short: "SOFA", label: "WAS ABSORBED BY THE HANG OUT ROOM SOFA" },
-  { short: "SPREADSHEET", label: "WAS REPLACED BY A SPREADSHEET" },
+  { short: "EXCEL", label: "WAS REPLACED BY A SPREADSHEET" },
   { short: "TERMS", label: "READ THE FULL TERMS AND CONDITIONS" },
   { short: "STAIRS", label: "TOOK THE STAIRS" },
   { short: "VENDING", label: "LOST EVERYTHING TO THE VENDING MACHINE" },
-  { short: "EMBARRASSED", label: "DIED OF EMBARRASSMENT" },
+  { short: "SHAME", label: "DIED OF EMBARRASSMENT" },
   { short: "BOREDOM", label: "DIED OF BOREDOM, IN THE PRINT ROOM, AT 3PM" },
   { short: "COMBUSTED", label: "SPONTANEOUSLY COMBUSTED" },
   { short: "ON HOLD", label: "DIED OF OLD AGE ON HOLD" },
 ];
 
-/** The effect string a killer broadcasts. Decoded by everyone, acted on by the victim. */
-export function doomEffect(victimId: string, cause: number): string {
-  return `doom:${victimId}:${cause}`;
+/**
+ * The effect string a killer broadcasts. Decoded by everyone, acted on by the victim.
+ *
+ * `doom:<cause>:<weapon>:<victim id>`. The id goes LAST because it is the only opaque
+ * part - a cause is a number and a weapon is a sprite name, so both are known to be
+ * colon-free, and putting the unknown at the end means the parse never has to guess
+ * where it ends.
+ */
+export function doomEffect(victimId: string, cause: number, weapon = ""): string {
+  return `doom:${cause}:${weapon}:${victimId}`;
 }
 
 export function reviveEffect(victimId: string): string {
   return `undoom:${victimId}`;
 }
 
-/** Parses "doom:<id>:<n>", or null if it is not one. */
-export function parseDoom(effect: string): { id: string; cause: number } | null {
+/** Parses "doom:<cause>:<weapon>:<id>", or null if it is not one. */
+export function parseDoom(
+  effect: string,
+): { id: string; cause: number; weapon: string } | null {
   if (!effect.startsWith("doom:")) return null;
   const rest = effect.slice("doom:".length);
-  const split = rest.lastIndexOf(":");
-  if (split <= 0) return null;
-  const cause = Number(rest.slice(split + 1));
+  const first = rest.indexOf(":");
+  if (first <= 0) return null;
+  const second = rest.indexOf(":", first + 1);
+  if (second < 0) return null;
+  const cause = Number(rest.slice(0, first));
   if (!Number.isInteger(cause) || cause < 0 || cause >= DOOMS.length) return null;
-  return { id: rest.slice(0, split), cause };
+  const id = rest.slice(second + 1);
+  if (!id) return null;
+  return { id, cause, weapon: rest.slice(first + 1, second) };
 }
 
 export function parseRevive(effect: string): string | null {
   return effect.startsWith("undoom:") ? effect.slice("undoom:".length) : null;
 }
 
-/** "MICHAEL WAS EATEN BY THE PRINTER". */
-export function headline(name: string, cause: number): string {
+/**
+ * "MICHAEL WAS EATEN BY THE PRINTER", or - if the killer had something in their hands -
+ * "MICHAEL WAS BEATEN TO DEATH WITH THE PHOTOCOPIER".
+ *
+ * The weapon wins because it is the funnier and truer account: everybody watching saw
+ * somebody walk over holding a photocopier, and a headline about the annual review would
+ * be describing a different event.
+ */
+export function headline(name: string, cause: number, weapon = ""): string {
+  const held = weapon.replace(/_/g, " ").trim().toUpperCase();
+  if (held) return `${name} WAS BEATEN TO DEATH WITH THE ${held}`;
   return `${name} ${DOOMS[cause]?.label ?? "IS NO LONGER WITH US"}`;
 }
 

@@ -467,14 +467,26 @@ const doom = await scenario(async (ctx) => {
   await walk(mike, "ArrowLeft", 700);
   const after = (await buds(mike, () => window.__buds.players())).find((p) => p.isLocal).x;
 
+  const feed = await buds(colin, () => window.__buds.deaths());
+  const scores = await buds(colin, () => window.__buds.scores());
+
   // And getting up is one tap.
   await tap(mike, '.hud__bottomright .round:has-text("GET UP")');
   await mike.waitForTimeout(600);
   const risen = (await buds(colin, () => window.__buds.players())).find((p) => !p.isLocal);
+
+  // Having just been put down, Michael can reach Colin from anywhere for a moment.
+  await buds(mike, () => window.__buds.place(40, 80));
+  await mike.waitForTimeout(400);
+  const grudge = await buds(mike, () => window.__buds.victim());
+
   await walk(mike, "ArrowLeft", 500);
   const moved = (await buds(mike, () => window.__buds.players())).find((p) => p.isLocal).x;
 
   return {
+    feed,
+    scores,
+    grudge,
     offered,
     onMikesScreen,
     seenByColin,
@@ -507,6 +519,25 @@ check("the dead do not walk", () => {
 check("getting up works, and is visible to everyone", () => {
   assert.equal(doom.risen.dead, -1, "Colin still sees a body");
   assert.ok(doom.walkedAfter, "could not move again after getting up");
+});
+
+check("the death goes into the feed", () => {
+  assert.equal(doom.feed.length, 1);
+  assert.match(doom.feed[0].text, /MICHAEL WAS EATEN BY THE PRINTER/i);
+});
+
+check("the tally credits the right people", () => {
+  const colin = doom.scores.find((r) => r.name === "COLIN");
+  const mike = doom.scores.find((r) => r.name === "MICHAEL");
+  assert.equal(colin?.kills, 1, "Colin was not credited");
+  assert.equal(colin?.deaths, 0);
+  assert.equal(mike?.deaths, 1, "Michael was not debited");
+  assert.equal(mike?.kills, 0);
+});
+
+check("getting up buys one swing back, from across the building", () => {
+  assert.equal(doom.grudge?.name, "COLIN", "no revenge offered");
+  assert.equal(doom.grudge?.revenge, true);
 });
 
 check("dying logs no errors", () => {

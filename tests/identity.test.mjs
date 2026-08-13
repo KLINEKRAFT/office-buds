@@ -151,19 +151,32 @@ console.log("\nways to go");
 
 check("a death round-trips through the effect string", () => {
   for (let i = 0; i < DOOMS.length; i++) {
-    const parsed = parseDoom(doomEffect("abc123", i));
-    assert.deepEqual(parsed, { id: "abc123", cause: i });
+    assert.deepEqual(parseDoom(doomEffect("abc123", i)), {
+      id: "abc123",
+      cause: i,
+      weapon: "",
+    });
   }
 });
 
+check("a weapon round-trips too", () => {
+  assert.deepEqual(parseDoom(doomEffect("abc", 2, "plant_tall")), {
+    id: "abc",
+    cause: 2,
+    weapon: "plant_tall",
+  });
+});
+
 check("an id with a colon in it still parses", () => {
-  assert.deepEqual(parseDoom("doom:a:b:2"), { id: "a:b", cause: 2 });
+  // Which is why the id goes last: it is the only part that could contain one.
+  assert.deepEqual(parseDoom(doomEffect("a:b:c", 2)), { id: "a:b:c", cause: 2, weapon: "" });
 });
 
 check("a cause off the end of the list is refused", () => {
-  assert.equal(parseDoom(`doom:x:${DOOMS.length}`), null);
-  assert.equal(parseDoom("doom:x:-1"), null);
-  assert.equal(parseDoom("doom:x:banana"), null);
+  assert.equal(parseDoom(`doom:${DOOMS.length}::x`), null);
+  assert.equal(parseDoom("doom:-1::x"), null);
+  assert.equal(parseDoom("doom:banana::x"), null);
+  assert.equal(parseDoom("doom:1::"), null);
   assert.equal(parseDoom("party"), null);
 });
 
@@ -176,12 +189,21 @@ check("reviving parses, and is not confused with dying", () => {
 check("every cause has a headline and a button that fits", () => {
   for (const d of DOOMS) {
     assert.ok(d.label.length > 0, "a cause with no headline");
-    assert.ok(d.short.length > 0 && d.short.length <= 12, `"${d.short}" will not fit a button`);
+    assert.ok(d.short.length > 0 && d.short.length <= 9, `"${d.short}" will not fit a button`);
   }
 });
 
 check("the headline names the victim", () => {
   assert.match(headline("MICHAEL", 3), /^MICHAEL /);
+});
+
+check("what you were holding becomes what you did it with", () => {
+  assert.equal(
+    headline("MICHAEL", 3, "plant_tall"),
+    "MICHAEL WAS BEATEN TO DEATH WITH THE PLANT TALL",
+  );
+  // Empty hands fall back to the cause on the list.
+  assert.equal(headline("MICHAEL", 3, ""), `MICHAEL ${DOOMS[3].label}`);
 });
 
 console.log(`\n${passed} passed`);
