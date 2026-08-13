@@ -2,7 +2,7 @@ import { createClient, type RealtimeChannel, type SupabaseClient } from "@supaba
 
 import { NET_SEND_HZ } from "../config";
 import type { CharacterId, PlayerState } from "../types";
-import { decodeIdentity } from "./identity";
+import { decodeIdentity, decodeMove } from "./identity";
 import type { Net, NetHandlers } from "./types";
 
 /**
@@ -56,17 +56,8 @@ export class SupabaseNet implements Net {
     channel.on("broadcast", { event: "m" }, ({ payload }) => {
       const p = payload as { id?: string } & Partial<PlayerState>;
       if (!p?.id || p.id === this.id) return;
-      if (typeof p.x !== "number" || typeof p.y !== "number") return;
-      this.handlers?.onMove(p.id, {
-        x: p.x,
-        y: p.y,
-        dir: p.dir ?? "down",
-        moving: !!p.moving,
-        emote: typeof p.emote === "string" ? p.emote : "",
-        room: typeof p.room === "string" ? p.room : "office",
-        carrying: typeof p.carrying === "number" ? p.carrying : -1,
-        ascended: !!p.ascended,
-      });
+      const state = decodeMove(p as unknown as Record<string, unknown>);
+      if (state) this.handlers?.onMove(p.id, state);
     });
 
     channel.on("broadcast", { event: "x" }, ({ payload }) => {

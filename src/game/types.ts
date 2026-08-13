@@ -56,6 +56,16 @@ export interface PlayerState {
    * replayed at them.
    */
   ascended: boolean;
+  /**
+   * Index into DOOMS of how this player died, or -1 if they are still with us.
+   *
+   * Replicated on the heartbeat for the same reason `carrying` and `ascended` are: the
+   * killer broadcasts the deed once, only the victim's own client acts on it, and from
+   * then on the fact rides the ordinary packet. Nobody can miss the event, the sprite
+   * and the headline are derived from one number so they cannot disagree, and somebody
+   * who arrives ten minutes later walks in on the bodies.
+   */
+  dead: number;
 }
 
 export interface Player extends PlayerState {

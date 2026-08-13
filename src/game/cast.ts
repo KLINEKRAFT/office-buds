@@ -1,5 +1,5 @@
 import { FALLBACK_CHARACTER } from "./net/identity";
-import type { CharacterId } from "./types";
+import { CHARACTER_IDS, type CharacterId } from "./types";
 
 /**
  * Who's who.
@@ -34,8 +34,23 @@ export const CAST: CastMember[] = [
   { name: "TIFFANY", aliases: ["TIFF"], character: "tiffany", seat: "guest" },
 ];
 
-/** Anyone not on the list still gets in, as a guest wearing this character. */
-const UNKNOWN_CHARACTER: CharacterId = FALLBACK_CHARACTER;
+/**
+ * Which character a name we do not know borrows.
+ *
+ * It used to be one fixed fallback, so every guest in the building was Michael - which
+ * is how Jenni turned up looking like Michael. Picking from the name instead means an
+ * unfamiliar name gets somebody who is at least not always the same somebody, and gets
+ * the SAME one every time they come back, which is what makes it read as a person
+ * rather than a glitch.
+ *
+ * This is a stopgap and should stay one: the real fix for any given name is a sheet of
+ * their own and a line in CAST below.
+ */
+function borrowedCharacter(name: string): CharacterId {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (Math.imul(h, 31) + name.charCodeAt(i)) | 0;
+  return CHARACTER_IDS[Math.abs(h) % CHARACTER_IDS.length] ?? FALLBACK_CHARACTER;
+}
 
 /** First name only - "Colin Kline" and "colin" are the same person walking in. */
 function normalize(raw: string): string {
@@ -43,8 +58,8 @@ function normalize(raw: string): string {
 }
 
 /**
- * Resolves a typed name to a cast member. Unknown names are welcome - they just come in
- * on the default sprite, so an invite never dead-ends on a typo.
+ * Resolves a typed name to a cast member. Unknown names are welcome - they borrow a
+ * character, so an invite never dead-ends on a typo or on somebody new.
  */
 export function castFor(rawName: string): CastMember {
   const name = normalize(rawName);
@@ -52,7 +67,7 @@ export function castFor(rawName: string): CastMember {
     if (member.name === name) return member;
     if (member.aliases?.some((a) => normalize(a) === name)) return member;
   }
-  return { name: name || "GUEST", character: UNKNOWN_CHARACTER, seat: "guest" };
+  return { name: name || "GUEST", character: borrowedCharacter(name), seat: "guest" };
 }
 
 /** True when the typed name matches somebody on the list, for entry-screen feedback. */

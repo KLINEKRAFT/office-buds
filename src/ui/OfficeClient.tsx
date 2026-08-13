@@ -60,6 +60,10 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
   // knowing where you are and wandering.
   const [here, setHere] = useState<string | null>(null);
   const [zoomedOut, setZoomedOut] = useState(false);
+  // Who is close enough to end, and whether it is us on the floor.
+  const [victim, setVictim] = useState<{ id: string; name: string } | null>(null);
+  const [dead, setDead] = useState(false);
+  const [doomOpen, setDoomOpen] = useState(false);
   const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reachTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -128,6 +132,9 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
           );
           const room = gameRef.current?.here ?? null;
           setHere((prev) => (prev === room ? prev : room));
+          const near = gameRef.current?.victim ?? null;
+          setVictim((prev) => (prev?.id === near?.id ? prev : near));
+          setDead(gameRef.current?.isDead ?? false);
         }, 250);
       } catch (e) {
         if (cancelled) return;
@@ -285,6 +292,24 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
             </div>
           )}
 
+          {!composerOpen && doomOpen && victim && (
+            <div className="tray tray--doom">
+              {(gameRef.current?.dooms ?? []).map((d) => (
+                <button
+                  key={d.index}
+                  type="button"
+                  className="round round--doom"
+                  onClick={() => {
+                    gameRef.current?.doom(victim.id, d.index);
+                    setDoomOpen(false);
+                  }}
+                >
+                  {d.short}
+                </button>
+              ))}
+            </div>
+          )}
+
           {!composerOpen && trayOpen && emotes.length > 0 && (
             <div className="tray">
               {emotes.map((e) => (
@@ -336,11 +361,38 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
                   {reach.label}
                 </button>
               )}
+              {dead && (
+                <button
+                  type="button"
+                  className="round round--act"
+                  onClick={() => gameRef.current?.getUp()}
+                >
+                  <span className="round__glyph">{"\u{1F54A}"}</span>
+                  GET UP
+                </button>
+              )}
+              {!dead && victim && (
+                <button
+                  type="button"
+                  className={`round round--doom${doomOpen ? " round--on" : ""}`}
+                  onClick={() => {
+                    setTrayOpen(false);
+                    setDoomOpen((v) => !v);
+                  }}
+                  aria-expanded={doomOpen}
+                >
+                  <span className="round__glyph">{"\u{1F480}"}</span>
+                  END {victim.name}
+                </button>
+              )}
               {emotes.length > 0 && (
                 <button
                   type="button"
                   className={`round${trayOpen ? " round--on" : ""}`}
-                  onClick={() => setTrayOpen((v) => !v)}
+                  onClick={() => {
+                    setDoomOpen(false);
+                    setTrayOpen((v) => !v);
+                  }}
                   aria-expanded={trayOpen}
                 >
                   <span className="round__glyph">{"\u{1F44B}"}</span>
@@ -352,6 +404,7 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
                 className="round round--chat"
                 onClick={() => {
                   setTrayOpen(false);
+                  setDoomOpen(false);
                   setComposerOpen(true);
                 }}
               >

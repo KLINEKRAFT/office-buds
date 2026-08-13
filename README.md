@@ -29,6 +29,8 @@ is Colin, Michael, Alexis, Melanie and Tiffany; anyone else gets in as a guest.
 - **WHOLE FLOOR** pulls the camera back until you can see the entire building at once —
   which is how you find everybody. Anybody off screen also gets an arrow at the edge with
   their name on it, and the chip in the top-left says which room you are standing in.
+- **END <NAME>** appears when you are standing next to somebody. Pick a way; everyone
+  sees the headline. They tap **GET UP** to come back.
 - **PICK UP** appears when you are standing next to something you can lift. You then
   carry it over your head until you put it down, and everyone sees you holding it.
 - Walk onto a chair to sit in it, or in behind the desk to sit at it.
@@ -202,6 +204,27 @@ parabola are the same gesture to everyone watching. Everybody now has at least s
 in the real manifest, and fails if any of them indexes a frame outside that character's
 own atlas. The arithmetic is the risky part: an off-by-one there draws somebody else's
 sprite, and it would look like a glitch rather than a bug.
+
+### Ways to go
+
+You can kill anybody in the room, and anybody can kill you. Walk up to somebody, tap
+**END <NAME>**, pick from the list — `MICHAEL WAS EATEN BY THE PRINTER` goes across
+everyone's screen, they go down where they stood, and **GET UP** puts them back. Typing
+"kill michael" does the same with a cause picked from the words, and "revive michael"
+takes it back.
+
+Getting up in one tap is the whole reason this is funny rather than annoying: nobody is
+ever locked out of the game they came here to play.
+
+It travels the same way `carrying` and `ascended` do. The killer broadcasts the deed once;
+only the victim's own client acts on it, setting `dead` on itself; from there that number
+rides the ordinary movement heartbeat, so every screen agrees about who is on the floor
+with nothing replayed, and somebody who walks in ten minutes later finds the bodies. The
+headline is derived from the same number, so the words and the sprite cannot disagree.
+
+`src/game/doom.ts` is the list, one line each. The index is what crosses the wire, so
+adding to the end is free and reordering will have somebody dying of the wrong thing on a
+client that has not reloaded. Add, do not rearrange.
 
 ### The grove
 

@@ -17,6 +17,9 @@ export interface Pose {
   rot: number;
 }
 
+/** Far enough into the faint that the topple has finished and it is just holding. */
+const DEATH_POSE_TIME = 2;
+
 function suffix(dir: Dir): "up" | "down" | "side" {
   if (dir === "up") return "up";
   if (dir === "down") return "down";
@@ -35,6 +38,17 @@ export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pos
   const flip = player.dir === "left";
   let clipName: string;
   let time: number;
+
+  // Dead players hold the faint: face down, where they fell, until somebody gets them
+  // up. Reusing the emote rather than adding a pose means every character can do it,
+  // including the three with no hand-drawn sheets beyond walking.
+  if (player.dead >= 0) {
+    const pose = procPose("faint", DEATH_POSE_TIME, meta, player.dir);
+    if (pose) {
+      const { sx, sy } = frameRect(meta, pose.frame);
+      return { sx, sy, flip: pose.flip, bob: pose.dy, dx: pose.dx, rot: pose.rot };
+    }
+  }
 
   const emote = player.emote ? resolveEmote(meta, player.emote) : null;
 
