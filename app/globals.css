@@ -165,27 +165,172 @@ button {
   gap: 18px;
 }
 
-.logo {
+/* ---- the invitation ------------------------------------------------------
+   The first thing anybody sees when they open a link, so it is doing the job a
+   screenshot would normally do. A real 3D card rather than a flat one with a shadow:
+   `preserve-3d`, a perspective camera, and a stack of faces at descending translateZ
+   so it has thickness you can see the side of when it turns.
+
+   The thickness is hard-edged slabs in darkening colours, not a gradient, because
+   everything else here is hard-edged and a soft bevel would look imported. */
+
+.invite {
+  perspective: 620px;
+  perspective-origin: 50% 45%;
+  display: flex;
+  justify-content: center;
+  /* The card leans toward a pointer anywhere in this box, not only over the card
+     itself, so the effect is findable without hunting for it. */
+  padding: 10px 0 4px;
+}
+
+.invite__tilt {
+  --lean-x: 0deg;
+  --lean-y: 0deg;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--lean-x)) rotateY(var(--lean-y));
+  transition: transform 220ms ease-out;
+  will-change: transform;
+}
+
+.invite__float {
+  position: relative;
+  width: 296px;
+  height: 158px;
+  transform-style: preserve-3d;
+  animation: invite-drift 9s ease-in-out infinite;
+}
+
+.invite__float--still {
+  animation: none;
+  transform: rotateX(6deg) rotateY(-9deg);
+}
+
+@keyframes invite-drift {
+  0%   { transform: rotateX(7deg)  rotateY(-13deg) translateY(0); }
+  25%  { transform: rotateX(2deg)  rotateY(4deg)   translateY(-4px); }
+  50%  { transform: rotateX(-4deg) rotateY(13deg)  translateY(0); }
+  75%  { transform: rotateX(1deg)  rotateY(2deg)   translateY(-3px); }
+  100% { transform: rotateX(7deg)  rotateY(-13deg) translateY(0); }
+}
+
+/* The card's edge. Six slabs is where it stops being worth another element. */
+.invite__slab,
+.invite__face {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--ink);
+}
+
+.invite__slab {
+  background: var(--slate-dark);
+}
+
+.invite__slab:nth-child(1) { background: #4b5070; }
+.invite__slab:nth-child(2) { background: #414560; }
+.invite__slab:nth-child(3) { background: #383b53; }
+.invite__slab:nth-child(4) { background: #2f3245; }
+.invite__slab:nth-child(5) { background: #272937; }
+/* The deepest slab doubles as the card's shadow - it is the only thing under the card
+   at a steep lean, and without it the card floats on nothing. */
+.invite__slab:nth-child(6) { background: #191a23; }
+
+.invite__face {
+  /* preserve-3d, NOT overflow:hidden: clipping flattens the subtree, and the lifted
+     title is the thing that makes the card read as having depth rather than as a
+     picture of depth. The sheen gets its own clipping wrapper instead. */
+  transform-style: preserve-3d;
+  /* A step lighter than the panel below it, so the card reads as the lit thing on the
+     screen rather than as another slab of chrome. */
+  background: var(--slate-light);
+  box-shadow:
+    inset 2px 2px 0 0 var(--bevel-light),
+    inset -2px -2px 0 0 var(--bevel-shade);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 16px 14px;
   text-align: center;
-  line-height: 1;
 }
 
-.logo__title {
-  margin: 0;
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: var(--cream);
-  text-shadow:
-    3px 3px 0 var(--accent),
-    6px 6px 0 var(--ink);
-}
-
-.logo__sub {
-  margin: 12px 0 0;
+.invite__kicker {
   font-size: 10px;
   letter-spacing: 0.24em;
+  text-transform: uppercase;
   color: var(--cream-dim);
+}
+
+.invite__title {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--cream);
+  line-height: 1;
+  /* One line, always. Wrapped across two it stops reading as a logo and starts reading
+     as a sentence that ran out of room. */
+  white-space: nowrap;
+  /* Lifted off the face, so the title has its own parallax as the card turns. */
+  transform: translateZ(14px);
+  text-shadow:
+    2px 2px 0 var(--accent),
+    4px 4px 0 var(--ink);
+}
+
+.invite__rule {
+  width: 62px;
+  height: 2px;
+  background: var(--accent);
+  transform: translateZ(7px);
+}
+
+.invite__meta {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cream-dim);
+  transform: translateZ(7px);
+}
+
+.invite__sheen-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.invite__sheen {
+  position: absolute;
+  top: -60%;
+  left: 0;
+  width: 34px;
+  height: 220%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.16),
+    transparent
+  );
+  /* Animated on transform rather than `left`: the same movement, without asking the
+     browser to lay the card out again sixty times a second. */
+  animation: invite-sheen 6.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes invite-sheen {
+  0%, 62% { transform: translateX(-60px) rotate(18deg); }
+  92%, 100% { transform: translateX(300px) rotate(18deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invite__float,
+  .invite__sheen {
+    animation: none;
+  }
+  .invite__tilt {
+    transition: none;
+  }
 }
 
 .panel {
@@ -336,6 +481,41 @@ button {
 .round__glyph {
   font-size: 18px;
   line-height: 1;
+}
+
+/* ---- emote tray ----------------------------------------------------------
+   Everyone now has between four and seven emotes. Laid out in the button row they
+   ran off the side of a phone, so the row keeps one EMOTE button and the rest live
+   in a tray above it. Wrap-reverse fills upward from the button that opened it,
+   which is where a thumb is already pointing. */
+
+.tray {
+  position: absolute;
+  right: calc(env(safe-area-inset-right, 0px) + 10px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
+  display: flex;
+  flex-wrap: wrap-reverse;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: min(272px, 76vw);
+  padding: 6px;
+  background: rgba(34, 34, 45, 0.82);
+  border: 2px solid var(--ink);
+  box-shadow: inset 1px 1px 0 0 rgba(255, 255, 255, 0.12);
+}
+
+.tray .round {
+  width: 46px;
+  height: 46px;
+  font-size: 8px;
+}
+
+.tray .round__glyph {
+  font-size: 16px;
+}
+
+.round--on {
+  background: var(--accent);
 }
 
 /* ---- chat ---------------------------------------------------------------- */
@@ -502,7 +682,12 @@ button {
 }
 
 @media (min-width: 720px) {
-  .logo__title {
+  .invite__float {
+    width: 356px;
+    height: 186px;
+  }
+
+  .invite__title {
     font-size: 38px;
   }
 }
@@ -555,9 +740,9 @@ button {
 }
 
 /*
- * With the contextual pick-up button the row can reach six. Wrapping it was worse than
- * the problem - the second row sat over the chat log - so the buttons shrink instead and
- * the row stays single-line down to a 360px phone.
+ * The row is LOG, an optional pick-up button, EMOTE and CHAT - four at most, because the
+ * emotes themselves moved into the tray. It still shrinks rather than wraps on a small
+ * phone: a wrapped second row sat on top of the chat log.
  */
 @media (max-width: 430px) {
   .round {
@@ -574,5 +759,15 @@ button {
 
   .round__glyph {
     font-size: 15px;
+  }
+
+  .tray {
+    /* The row is shorter here, so the tray comes down to meet it. */
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
+  }
+
+  .tray .round {
+    width: 42px;
+    height: 42px;
   }
 }

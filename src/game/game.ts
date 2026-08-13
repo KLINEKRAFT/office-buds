@@ -4,7 +4,6 @@ import {
   BUBBLE_MAX_W,
   BUBBLE_MIN_MS,
   BUBBLE_PER_CHAR_MS,
-  EMOTES,
   MAX_MESSAGE_LEN,
   NET_IDLE_RESEND_MS,
   PEER_TIMEOUT_MS,
@@ -15,7 +14,8 @@ import {
   TRANSITION_MS,
   WALK_SPEED,
 } from "./config";
-import { availableEmotes, emoteFinished } from "./core/anim";
+import { emoteFinished } from "./core/anim";
+import { emotesFor, resolveEmote, type EmoteDef } from "./core/emotes";
 import { loadAssets, loadVillage, type Assets } from "./core/assets";
 import { Audio } from "./core/audio";
 import { Camera } from "./core/camera";
@@ -116,6 +116,8 @@ export class Game {
   private burst: { kind: Burst; time: number } | null = null;
   /** Whether the thing in the circle has been called up. */
   private summoned = false;
+  /** ?test (or ?debug) installs the read-only introspection hook used by the tests. */
+  private testSeam = false;
 
   private constructor(
     private readonly opts: GameOptions,
@@ -171,6 +173,7 @@ export class Game {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       this.renderer.debugColliders = params.has("debug");
+      this.testSeam = params.has("test") || params.has("debug");
       const scale = Number(params.get("scale"));
       if (Number.isFinite(scale) && scale >= 1 && scale <= 8) this.renderer.scaleOverride = scale;
     }
@@ -182,6 +185,40 @@ export class Game {
 
     this.camera.snapTo(this.local.renderX, this.local.renderY);
     this.opts.onPlace(this.room.def.name);
+
+    // Test seam, behind ?debug. The browser tests need to ask what the game actually
+    // believes - who is here, what they are wearing, which room they are standing in -
+    // and reading that off a canvas is not a test, it is a guess. Deliberately read-only
+    // except for `place`, which exists so a test can put somebody somewhere without
+    // driving them there one arrow key at a time.
+    if (this.testSeam && typeof window !== "undefined") {
+      (window as unknown as { __buds?: unknown }).__buds = {
+        room: () => this.room.def.id,
+        players: () =>
+          [...this.players.values()].map((p) => ({
+            id: p.id,
+            name: p.name,
+            character: p.character,
+            x: Math.round(p.x),
+            y: Math.round(p.y),
+            emote: p.emote,
+            carrying: p.carrying,
+            ascended: p.ascended,
+            room: p.room,
+            isLocal: p.id === this.local.id,
+          })),
+        emotes: () => this.emotes.map((e) => e.clip),
+        mood: () => this.mood,
+        summoned: () => this.summoned,
+        reach: () => this.reach,
+        place: (x: number, y: number) => {
+          this.local.x = this.local.renderX = x;
+          this.local.y = this.local.renderY = y;
+          this.lastSent = null;
+          this.camera.snapTo(x, y);
+        },
+      };
+    }
 
     // Pull the outdoor atlas in the background so stepping outside is instant.
     void loadVillage(this.assets).catch(() => {});
@@ -246,7 +283,8 @@ export class Game {
         // than sent, so it cannot arrive out of order with the message that caused it.
         if (p.room === this.local.room) {
           const magic = matchChatMagic(text, p.character);
-          if (magic?.emote && this.assets.characters[p.character]?.meta.clips[magic.emote]) {
+          const meta = this.assets.characters[p.character]?.meta;
+          if (magic?.emote && meta && resolveEmote(meta, magic.emote)) {
             p.emote = magic.emote;
             p.emoteTime = 0;
           }
@@ -325,6 +363,20 @@ export class Game {
       // if nobody said the opening words, and calling them back brings the day up again.
       this.mood = rising ? "normal" : "ritual";
       this.audio.join();
+      return;
+    }
+    // "emote:dance" - everyone in the room plays it. Each client applies it to its OWN
+    // player and lets the ordinary heartbeat carry that to everybody else, which is the
+    // same trick `carrying` and `ascended` use: no separate broadcast to lose, and a late
+    // arrival simply sees whatever people are already doing.
+    if (effect.startsWith("emote:")) {
+      const clip = effect.slice("emote:".length);
+      const meta = this.assets.characters[this.local.character].meta;
+      if (resolveEmote(meta, clip)) {
+        this.local.emote = clip;
+        this.local.emoteTime = 0;
+        this.lastSent = null;
+      }
       return;
     }
     if (isMood(effect)) {
@@ -785,17 +837,20 @@ export class Game {
 
   emote(clip: string): void {
     const meta = this.assets.characters[this.local.character].meta;
-    if (!meta.clips[clip]) return;
+    // Resolved rather than looked up: an emote a character has no art for still plays,
+    // as the synthesised stand-in. Only something nobody can play is refused.
+    if (!resolveEmote(meta, clip)) return;
+    // You cannot hold the photocopier over your head while lying on the floor. Dropping
+    // it is also funnier than keeping it, which settles it.
+    if (clip === "faint" && this.local.carrying >= 0) this.local.carrying = -1;
     this.local.emote = clip;
     this.local.emoteTime = 0;
     this.lastSent = null;
   }
 
-  /** Emotes this player's character actually has art for. */
-  get emotes(): Array<{ clip: string; label: string; glyph: string }> {
-    const meta = this.assets.characters[this.local.character].meta;
-    const have = new Set(availableEmotes(meta, EMOTES.map((e) => e.clip)));
-    return EMOTES.filter((e) => have.has(e.clip));
+  /** Emote buttons this player can offer - their own art, or a synthesised stand-in. */
+  get emotes(): EmoteDef[] {
+    return emotesFor(this.assets.characters[this.local.character].meta);
   }
 
   /** Called when a text field takes focus, so held keys do not stick. */

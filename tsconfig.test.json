@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".testbuild",
+    "incremental": false,
+    "declaration": false,
+    "sourceMap": false,
+    "plugins": []
+  },
+  "include": ["src/game/**/*.ts"]
+}

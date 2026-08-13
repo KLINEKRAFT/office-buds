@@ -6,6 +6,8 @@ import type { StickView } from "../core/input";
 import {
   CARRY_LIFT,
   CARRY_LIFT_LOW,
+  DOOR_FAR,
+  DOOR_NEAR,
   FRAME,
   MAX_SCALE,
   MIN_SCALE,
@@ -16,7 +18,7 @@ import {
 } from "../config";
 import type { Player } from "../types";
 import { drawSprite } from "../world/build";
-import type { BuiltRoom } from "../world/build";
+import type { BuiltRoom, DrawProp } from "../world/build";
 import { bubbleFade, drawBubble, drawNameTag } from "./bubble";
 import { drawConfetti, drawMood, shakeOffset, type Burst, type Mood } from "../effects";
 
@@ -24,6 +26,25 @@ import { drawConfetti, drawMood, shakeOffset, type Burst, type Mood } from "../e
 function clampPan(v: number, roomSize: number, viewSize: number): number {
   if (roomSize <= viewSize) return Math.round((roomSize - viewSize) / 2);
   return Math.min(Math.max(v, 0), roomSize - viewSize);
+}
+
+/**
+ * Which frame of a door to draw: shut when nobody is near, wide open when somebody is
+ * on top of it, and eased between the two in the yard or so in front of it.
+ */
+function doorFrame(p: DrawProp, players: Player[]): number {
+  const ax = p.anchorX ?? p.x;
+  const ay = p.anchorY ?? p.y;
+  let nearest = Infinity;
+  for (const player of players) {
+    const d = Math.hypot(player.renderX - ax, player.renderY - ay);
+    if (d < nearest) nearest = d;
+  }
+  const last = (p.frames?.length ?? 1) - 1;
+  if (nearest >= DOOR_FAR) return 0;
+  if (nearest <= DOOR_NEAR) return last;
+  const t = (DOOR_FAR - nearest) / (DOOR_FAR - DOOR_NEAR);
+  return Math.round(t * last);
 }
 
 /** Widths of each row of the 5-row character shadow, so it stays a crisp pixel blob. */
@@ -170,10 +191,13 @@ export class Renderer {
       ) {
         continue;
       }
+      // A door reads its frame off whoever is nearest, so it swings open as somebody
+      // walks up to it and shuts behind them. Everybody computes this from positions
+      // they already have, so it needs nothing on the wire and cannot get out of step.
+      const rect = p.frames ? p.frames[doorFrame(p, players)] : p.rect;
       items.push({
         sortY: p.sortY,
-        draw: () =>
-          drawSprite(ctx, room.atlas, p.rect, p.x - cam.x, p.y - cam.y, p.flip),
+        draw: () => drawSprite(ctx, room.atlas, rect, p.x - cam.x, p.y - cam.y, p.flip),
       });
     }
 
@@ -228,18 +252,29 @@ export class Renderer {
             ctx.globalAlpha = 1;
             return;
           }
+          // The shadow stays where the feet are, and is NOT offset by the pose. That is
+          // what sells a hop: the sprite leaves the ground and its shadow does not go
+          // with it.
           this.drawShadow(cx, feetY);
-          const dx = cx - FRAME / 2;
-          const dy = feetY - FRAME + pose.bob;
-          if (pose.flip) {
-            ctx.save();
-            ctx.translate(dx + FRAME, dy);
-            ctx.scale(-1, 1);
-            ctx.drawImage(asset.image, pose.sx, pose.sy, FRAME, FRAME, 0, 0, FRAME, FRAME);
-            ctx.restore();
-          } else {
-            ctx.drawImage(asset.image, pose.sx, pose.sy, FRAME, FRAME, dx, dy, FRAME, FRAME);
-          }
+          // One transform for every case - mirrored side walks, a swaying dance, a
+          // quarter-turn faint. Every term is a whole number, so the sprite still lands
+          // on the pixel grid and stays crisp.
+          ctx.save();
+          ctx.translate(cx + pose.dx, feetY + pose.bob);
+          if (pose.rot !== 0) ctx.rotate(pose.rot);
+          if (pose.flip) ctx.scale(-1, 1);
+          ctx.drawImage(
+            asset.image,
+            pose.sx,
+            pose.sy,
+            FRAME,
+            FRAME,
+            -FRAME / 2,
+            -FRAME,
+            FRAME,
+            FRAME,
+          );
+          ctx.restore();
           // Held overhead, bottom-centred on the hands. Drawn with the carrier rather
           // than as its own sortable item so it can never separate from them.
           // Hidden for the length of the grab clip: the whole point of that animation is
@@ -250,7 +285,7 @@ export class Renderer {
               ctx,
               room.atlas,
               carriedRect,
-              cx - Math.round(carriedRect.w / 2),
+              cx + pose.dx - Math.round(carriedRect.w / 2),
               feetY - holdY - carriedRect.h + pose.bob,
               false,
             );

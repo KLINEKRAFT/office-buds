@@ -11,3 +11,10 @@ build/
 next-env.d.ts
 __pycache__/
 .testbuild/
+
+# Third-party art packs. The generated atlases in public/assets/ are committed and are
+# what the game actually loads; the packs themselves are licensed for use, NOT for
+# redistribution, so they stay out of the repository. See art-source/README.md for
+# where to put them when you need to re-run the builders.
+art-source/modern-office/
+art-source/modern-interiors/

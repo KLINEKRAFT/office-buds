@@ -27,6 +27,13 @@ export interface PropDef {
   /** Draw order tiebreak for props sharing an anchor y. */
   bias?: number;
   /**
+   * An animated door. `sprite` names the base - "door_wood" - and the four frames
+   * `_0` (shut) through `_3` (wide open) are looked up from it. A door opens as somebody
+   * walks up to it and never blocks: it sits in a doorway gap, which is already a hole
+   * in the wall's collision.
+   */
+  door?: boolean;
+  /**
    * Can be picked up and carried. A taken prop stops being drawn and stops colliding;
    * putting it down returns it to exactly this spot, which is what keeps the world state
    * derivable from who is holding what rather than needing to be tracked separately.
@@ -54,6 +61,33 @@ export interface FloorZone {
   nine?: string;
   /** Blocks movement across the whole zone - water, mostly. */
   solid?: boolean;
+}
+
+/**
+ * An interior wall: a run of tiles that divides one part of a room from another.
+ *
+ * The top-edge wall band is baked into the background because nobody can ever stand
+ * behind it. An interior wall is different - you walk round both sides of it - so it is
+ * cut into one segment per tile and depth sorted with everything else. A segment sorts
+ * at the floor line of the tile it stands on, so somebody one row above it is drawn
+ * first and disappears behind it, and somebody one row below walks in front. Splitting
+ * per tile is what makes a vertical run work: each tile of it needs its own sort key,
+ * or the whole run jumps in front of you at once as you walk down beside it.
+ */
+export interface WallRun {
+  /** Start of the run, in floor tiles. */
+  tx: number;
+  ty: number;
+  /** Length in tiles along `dir`. */
+  len: number;
+  dir: "h" | "v";
+  /**
+   * Doorways, as offsets in tiles from the start of the run. A gap tile keeps its lintel
+   * and loses its collider, so you can see the opening and walk through it.
+   */
+  gaps?: Array<{ at: number; len: number }>;
+  /** Wallpaper sprite. Defaults to the room's `wallTile`. */
+  tile?: string;
 }
 
 /**
@@ -118,6 +152,8 @@ export interface RoomDef {
   wallTile?: string;
   /** Tile ranges where the band is cut away to leave a doorway. */
   wallGaps?: Array<{ tx: number; tw: number }>;
+  /** Walls inside the room, dividing it into sections. */
+  walls?: WallRun[];
   /** Base ground tiles, picked per tile by a hash so no pattern emerges. */
   groundTiles: string[];
   floorZones?: FloorZone[];

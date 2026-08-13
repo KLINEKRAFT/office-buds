@@ -15,11 +15,17 @@ import type { CharacterId } from "./types";
 export interface ChatMagic {
   /** Substrings to look for, already lower-case and stripped of punctuation. */
   phrases: string[];
-  /** Clip to play on the speaker, if their character has the art for it. */
+  /**
+   * Emote to play on the speaker. Resolved through the emote table, so a character with
+   * no sheet for it plays the synthesised stand-in rather than nothing at all.
+   */
   emote?: string;
   /** Banner shown to everyone in the room. "{name}" becomes the speaker's name. */
   announce?: string;
-  /** Room-wide effect broadcast to everyone: a mood, a burst, or "leave". */
+  /**
+   * Room-wide effect broadcast to everyone: a mood, a burst, "leave", a step of the
+   * rite, or "emote:<clip>" to make the whole room do something in unison.
+   */
   effect?: string;
   /**
    * Require the whole message to be the phrase, not just to contain it. Reserved for the
@@ -102,7 +108,7 @@ export const CHAT_MAGIC: ChatMagic[] = [
   {
     phrases: ["party time", "lets party", "party mode", "disco"],
     effect: "party",
-    emote: "jump",
+    emote: "dance",
     announce: "{name} STARTED A PARTY",
   },
   {
@@ -123,6 +129,78 @@ export const CHAT_MAGIC: ChatMagic[] = [
     exact: true,
     announce: "{name} CLEARED THE ROOM",
   },
+
+  /*
+   * ---- the corporate ones -----------------------------------------------------------
+   *
+   * These are the reason the synthesised emotes exist. Every one of them plays for all
+   * five characters, because a joke that only lands for the two people with hand-drawn
+   * sheets is not a joke, it is a privilege.
+   *
+   * `emote:` effects hit everyone in the room rather than only the speaker - see
+   * applyEffect. Used sparingly: a room-wide reaction is funny once and tiresome on a
+   * hair trigger, so all of these are exact matches.
+   */
+  {
+    // The full bingo card. Saying any of it out loud should have consequences.
+    phrases: [
+      "circle back", "touch base", "synergy", "leverage", "bandwidth",
+      "low hanging fruit", "move the needle", "double click", "boil the ocean",
+    ],
+    exact: true,
+    effect: "emote:faint",
+    announce: "SOMEBODY SAID IT",
+  },
+  {
+    phrases: ["all hands", "town hall", "another meeting", "quick sync", "offsite"],
+    exact: true,
+    emote: "faint",
+    announce: "{name} HAS SEEN THE INVITE",
+  },
+  {
+    phrases: ["reply all", "replied all"],
+    exact: true,
+    effect: "emote:panic",
+    announce: "IT WENT TO EVERYONE",
+  },
+  {
+    phrases: ["prod is down", "site is down", "everything is broken", "its on fire"],
+    exact: true,
+    emote: "panic",
+    effect: "shake",
+    announce: "NOBODY PANIC",
+  },
+  {
+    phrases: ["works on my machine"],
+    exact: true,
+    emote: "spin",
+    announce: "{name} HAS DONE ALL THEY CAN",
+  },
+  {
+    phrases: ["friday", "its friday", "weekend"],
+    exact: true,
+    emote: "dance",
+    announce: "{name} CAN SEE THE WEEKEND",
+  },
+  {
+    phrases: ["monday", "its monday"],
+    exact: true,
+    emote: "faint",
+    announce: "IT IS MONDAY SOMEWHERE",
+  },
+  {
+    phrases: ["im dead", "i cant even", "dying", "rip me", "i am deceased"],
+    emote: "faint",
+    announce: "{name} DID NOT SURVIVE",
+  },
+
+  // ---- emotes anyone can ask for by name ------------------------------------------
+  // Typing the word does the thing. Discoverable without a manual, which is the whole
+  // reason the phrase table exists.
+  { phrases: ["dance", "lets dance", "dance party", "bust a move"], emote: "dance" },
+  { phrases: ["spin", "spin around", "twirl"], exact: true, emote: "spin" },
+  { phrases: ["panic", "run", "aaaa", "aaah"], exact: true, emote: "panic" },
+  { phrases: ["faint", "lie down", "collapse"], exact: true, emote: "faint" },
 
   // ---- easter eggs ----------------------------------------------------------------
   {

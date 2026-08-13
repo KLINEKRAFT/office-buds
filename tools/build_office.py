@@ -5,7 +5,7 @@ Office Buds - office atlas builder (LimeZu "Modern Office - Revamped").
 Packs the pieces of the pack this office actually uses into one atlas, and writes the
 same props.png / props.json the game already loads, so nothing downstream changes.
 
-Three sources, all under art-source/modern-office/:
+Two sources, both under art-source/modern-office/:
 
 1. singles/       339 numbered sprites, each centred in a 32x48 box. They are trimmed to
                   their opaque pixels here, so rooms can place them by bottom-centre
@@ -13,8 +13,11 @@ Three sources, all under art-source/modern-office/:
 2. Room_Builder   one 16x16-grid sheet. The left half is wallpaper - each style is a
                   32px band containing its own cap and skirting, so a wall band is one
                   16px-wide slice tiled sideways. The right half is floor tiles.
-3. LICENSE.txt    vendored alongside; the pack allows commercial use but not
-                  redistribution of the art itself.
+
+The pack itself is NOT in the repository - its licence allows using the art but not
+redistributing it, so `art-source/modern-office/` is gitignored and the committed
+`public/assets/props.png` (a derived work, which the licence is for) is what ships. You
+only need the pack to change the office art; see art-source/README.md.
 
 The pack is drawn from a higher angle than a person is - you see the top of a desk but
 you look a character in the eye - so the two do not agree perfectly. It lands close
@@ -206,7 +209,76 @@ def trim(im: Image.Image) -> Image.Image:
     return im.crop((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1))
 
 
+# ---- doors (LimeZu "Modern Interiors") ---------------------------------------------
+#
+# Modern Office has no door in it - 339 sprites and not one of them - so the doors come
+# from LimeZu's Modern Interiors instead. Same artist, same palette, same 16px grid, and
+# a closed leaf measures 16x28 against a 32px wall, which is precisely the proportion a
+# door should have. The two packs sit together without any coaxing.
+#
+# The files are RPG Maker MV exports, which means two things. They are a clean 3x
+# upscale, so `[::3, ::3]` recovers the original pixels exactly rather than resampling
+# them. And they are laid out as MV character cells: 3 columns by 4 rows of 48x144 - one
+# column per door, one row per stage of it swinging open.
+INTERIORS = os.path.join(ROOT, "art-source", "modern-interiors")
+
+# file -> the three doors in its columns, left to right.
+DOORS: dict[str, tuple[str, str, str]] = {
+    "Doors1": ("door_red", "door_wood", "door_tan"),
+    "Doors_special": ("door_wc", "door_exit", "door_cold"),
+}
+
+# Every frame is cut to the same box so the four of them share one anchor - otherwise
+# the door jumps sideways as it opens. The leaf swings up and out in perspective, so the
+# open frames are taller than the closed one and the box has to fit the tallest.
+DOOR_CELL_W, DOOR_CELL_H = 16, 48
+DOOR_TOP, DOOR_BOTTOM = 4, 47
+
+
+def door_frames() -> dict[str, Image.Image]:
+    """Every door, as `<name>_0` (shut) through `<name>_3` (wide open)."""
+    out: dict[str, Image.Image] = {}
+    for stem, names in DOORS.items():
+        path = os.path.join(INTERIORS, f"{stem}.png")
+        if not os.path.exists(path):
+            raise SystemExit(
+                f"door sheet not found: {path}\n"
+                "Modern Interiors is gitignored for the same licence reason as Modern\n"
+                "Office. See art-source/README.md."
+            )
+        sheet = Image.open(path).convert("RGBA")
+        native = Image.fromarray(np.array(sheet)[::3, ::3])
+        for col, name in enumerate(names):
+            for row in range(4):
+                box = (
+                    col * DOOR_CELL_W,
+                    row * DOOR_CELL_H + DOOR_TOP,
+                    (col + 1) * DOOR_CELL_W,
+                    row * DOOR_CELL_H + DOOR_BOTTOM,
+                )
+                out[f"{name}_{row}"] = native.crop(box)
+    return out
+
+
+def require_pack() -> None:
+    """
+    The pack is not in the repository - its licence forbids redistributing the art, and
+    the generated atlas is what ships. So the common way to run this builder is without
+    the input, and it should say so in one line rather than dying on a stray file.
+    """
+    if os.path.isdir(os.path.join(SRC, "singles")) and os.path.isdir(INTERIORS):
+        return
+    raise SystemExit(
+        f"Art packs not found ({SRC}, {INTERIORS})\n"
+        "\n"
+        "It is gitignored on purpose: the licence allows using the art, not\n"
+        "redistributing it, and public/assets/props.png is already built and committed.\n"
+        "You only need the pack to change the office art. See art-source/README.md."
+    )
+
+
 def main() -> None:
+    require_pack()
     sprites: dict[str, Image.Image] = {}
 
     for name, idx in SINGLES.items():
@@ -216,6 +288,7 @@ def main() -> None:
         sprites[name] = trim(Image.open(path).convert("RGBA"))
 
     sprites.update(rug_set())
+    sprites.update(door_frames())
 
     rb = Image.open(os.path.join(SRC, "Room_Builder_Office_16x16.png")).convert("RGBA")
     # Column 1 rather than column 0: the first column of a wallpaper block carries the
