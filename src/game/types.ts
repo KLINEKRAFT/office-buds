@@ -19,8 +19,14 @@ export interface PlayerState {
   y: number;
   dir: Dir;
   moving: boolean;
-  /** Non-zero while a one-shot emote plays; see EMOTE_* in config. */
-  emote: number;
+  /**
+   * Name of a one-shot clip that is playing, or "" for none. A name rather than an
+   * enum because the available emotes differ per character - Colin has his laptop,
+   * Michael does not - so the set is whatever the atlas manifest happens to hold.
+   */
+  emote: string;
+  /** Which room this player is standing in. Players elsewhere are not drawn. */
+  room: string;
 }
 
 export interface Player extends PlayerState {

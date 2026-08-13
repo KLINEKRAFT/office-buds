@@ -1,7 +1,7 @@
 import type { Assets, SpriteRect } from "../core/assets";
 import { TILE } from "../config";
 import type { Rect } from "../types";
-import type { PropDef, RoomDef } from "./types";
+import type { AtlasId, PropDef, RoomDef } from "./types";
 
 export interface DrawProp {
   rect: SpriteRect;
@@ -18,7 +18,9 @@ export interface BuiltRoom {
   width: number;
   height: number;
   wallHeight: number;
-  /** Pre-rendered floor + wall + wall-mounted props. Blitted once per frame. */
+  /** The atlas this room's props are drawn from. */
+  atlas: HTMLImageElement;
+  /** Pre-rendered ground, walls and wall-mounted props. Blitted once per frame. */
   background: HTMLCanvasElement;
   /** Depth-sorted props that characters can walk in front of and behind. */
   floorProps: DrawProp[];
@@ -26,9 +28,9 @@ export interface BuiltRoom {
 }
 
 /**
- * Default floor footprint for a solid prop: the bottom slice of its sprite, inset a
- * little. Front-elevation furniture is drawn taller than the floor space it occupies,
- * so using the whole sprite as a collider would feel like walking into invisible walls.
+ * Default ground footprint for a solid prop: the bottom slice of its sprite, inset a
+ * little. Front-elevation furniture and trees are drawn far taller than the ground they
+ * occupy, so using the whole sprite would feel like walking into invisible walls.
  */
 function autoCollider(def: PropDef, rect: SpriteRect): Rect {
   const depth = Math.max(5, Math.round(rect.h * 0.4));
@@ -41,89 +43,94 @@ function autoCollider(def: PropDef, rect: SpriteRect): Rect {
   };
 }
 
-function missing(sprite: string): never {
-  throw new Error(`room references unknown sprite "${sprite}"`);
-}
-
 function layerRank(p: PropDef): number {
   if (p.layer === "ground") return 0;
   if (p.layer === "wall") return 1;
   return 2;
 }
 
+/**
+ * Cheap deterministic hash. Ground tiles pick their variant from this so a field of
+ * grass never falls into a visible repeat, and the same tile is the same every frame.
+ */
+function tileHash(x: number, y: number): number {
+  let h = Math.imul(x, 374761393) + Math.imul(y, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+export function atlasFor(assets: Assets, id: AtlasId) {
+  return id === "village" ? assets.village : assets.props;
+}
+
 export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
   const width = def.widthTiles * TILE;
-  const floorHeight = def.heightTiles * TILE;
-  const height = def.wallHeight + floorHeight;
+  const groundHeight = def.heightTiles * TILE;
+  const height = def.wallHeight + groundHeight;
 
-  const atlas = assets.props;
-  const get = (name: string): SpriteRect => atlas.sprites[name] ?? missing(name);
+  const source = atlasFor(assets, def.atlas);
+  if (!source) throw new Error(`atlas "${def.atlas}" is not loaded`);
+  const get = (name: string): SpriteRect => {
+    const r = source.sprites[name];
+    if (!r) throw new Error(`room "${def.id}" references unknown sprite "${name}"`);
+    return r;
+  };
 
-  // ---- static background ------------------------------------------------
   const background = document.createElement("canvas");
   background.width = width;
   background.height = height;
   const ctx = background.getContext("2d")!;
   ctx.imageSmoothingEnabled = false;
 
-  const wall = get("wall");
-  const wallCap = get("wall_cap");
-  const baseboard = get("baseboard");
-  const floorA = get("floor_a");
-  const floorB = get("floor_b");
+  const blit = (rect: SpriteRect, x: number, y: number) =>
+    ctx.drawImage(source.image, rect.x, rect.y, rect.w, rect.h, x, y, rect.w, rect.h);
 
-  for (let y = 0; y < def.wallHeight; y += TILE) {
-    for (let x = 0; x < width; x += TILE) {
-      ctx.drawImage(atlas.image, wall.x, wall.y, wall.w, wall.h, x, y, wall.w, wall.h);
-    }
-  }
-  for (let x = 0; x < width; x += TILE) {
-    ctx.drawImage(atlas.image, wallCap.x, wallCap.y, wallCap.w, wallCap.h, x, 0, wallCap.w, wallCap.h);
-  }
-
-  for (let y = def.wallHeight; y < height; y += TILE) {
-    for (let x = 0; x < width; x += TILE) {
-      const alt = ((x / TILE + y / TILE) & 1) === 0;
-      const t = alt ? floorA : floorB;
-      ctx.drawImage(atlas.image, t.x, t.y, t.w, t.h, x, y, t.w, t.h);
+  // ---- ground ------------------------------------------------------------
+  const ground = def.groundTiles.map(get);
+  for (let ty = 0; ty < def.heightTiles; ty++) {
+    for (let tx = 0; tx < def.widthTiles; tx++) {
+      const t = ground[tileHash(tx, ty) % ground.length];
+      blit(t, tx * TILE, def.wallHeight + ty * TILE);
     }
   }
 
-  // Zoned carpet, laid over the base floor on the same grid.
-  for (const zone of def.floorZones ?? []) {
-    const [keyA, keyB] = zone.tiles;
-    const a = get(keyA);
-    const b = get(keyB);
-    for (let ty = zone.ty; ty < zone.ty + zone.th; ty++) {
-      for (let tx = zone.tx; tx < zone.tx + zone.tw; tx++) {
-        const x = tx * TILE;
-        const y = def.wallHeight + ty * TILE;
-        if (x < 0 || y < 0 || x >= width || y >= height) continue;
-        const t = ((tx + ty) & 1) === 0 ? a : b;
-        ctx.drawImage(atlas.image, t.x, t.y, t.w, t.h, x, y, t.w, t.h);
-      }
-    }
-  }
-
-  // Skirting sits on the seam between wall and floor.
-  for (let x = 0; x < width; x += TILE) {
-    ctx.drawImage(
-      atlas.image,
-      baseboard.x,
-      baseboard.y,
-      baseboard.w,
-      baseboard.h,
-      x,
-      def.wallHeight - baseboard.h,
-      baseboard.w,
-      baseboard.h,
-    );
-  }
-
-  const floorProps: DrawProp[] = [];
   const colliders: Rect[] = [];
 
-  // Ground props go down before wall props so a rug can never cover the skirting.
+  for (const zone of def.floorZones ?? []) {
+    const tiles = zone.tiles.map(get);
+    for (let ty = zone.ty; ty < zone.ty + zone.th; ty++) {
+      for (let tx = zone.tx; tx < zone.tx + zone.tw; tx++) {
+        if (tx < 0 || ty < 0 || tx >= def.widthTiles || ty >= def.heightTiles) continue;
+        const t = tiles[tileHash(tx + 977, ty + 311) % tiles.length];
+        blit(t, tx * TILE, def.wallHeight + ty * TILE);
+      }
+    }
+    if (zone.solid) {
+      colliders.push({
+        x: zone.tx * TILE,
+        y: def.wallHeight + zone.ty * TILE,
+        w: zone.tw * TILE,
+        h: zone.th * TILE,
+      });
+    }
+  }
+
+  // ---- wall band (indoor rooms only) --------------------------------------
+  if (def.wallHeight > 0) {
+    const wall = get("wall");
+    const wallCap = get("wall_cap");
+    const baseboard = get("baseboard");
+    for (let y = 0; y < def.wallHeight; y += TILE) {
+      for (let x = 0; x < width; x += TILE) blit(wall, x, y);
+    }
+    for (let x = 0; x < width; x += TILE) blit(wallCap, x, 0);
+    for (let x = 0; x < width; x += TILE) {
+      blit(baseboard, x, def.wallHeight - baseboard.h);
+    }
+  }
+
+  // ---- props ---------------------------------------------------------------
+  const floorProps: DrawProp[] = [];
   const ordered = [...def.props].sort((a, b) => layerRank(a) - layerRank(b));
 
   for (const p of ordered) {
@@ -132,7 +139,7 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
     const drawY = Math.round(p.y - rect.h);
 
     if (p.layer === "wall" || p.layer === "ground") {
-      drawSprite(ctx, atlas.image, rect, drawX, drawY, p.flip ?? false);
+      drawSprite(ctx, source.image, rect, drawX, drawY, p.flip ?? false);
     } else {
       floorProps.push({
         rect,
@@ -149,7 +156,23 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
   floorProps.sort((a, b) => a.sortY - b.sortY);
   for (const b of def.blockers ?? []) colliders.push(b);
 
-  return { def, width, height, wallHeight: def.wallHeight, background, floorProps, colliders };
+  if (def.tint) {
+    ctx.globalAlpha = def.tint.alpha;
+    ctx.fillStyle = def.tint.color;
+    ctx.fillRect(0, 0, width, height);
+    ctx.globalAlpha = 1;
+  }
+
+  return {
+    def,
+    width,
+    height,
+    wallHeight: def.wallHeight,
+    atlas: source.image,
+    background,
+    floorProps,
+    colliders,
+  };
 }
 
 /** Shared sprite blit that understands horizontal flipping. */

@@ -14,6 +14,8 @@ export interface NetHandlers {
   onLeave(id: string): void;
   onMove(id: string, state: PlayerState): void;
   onChat(id: string, text: string, at: number): void;
+  /** Somebody invited the room somewhere; everyone goes. */
+  onGo(id: string, room: string, spawn: number, announce: string): void;
   onStatus(status: NetStatus, detail?: string): void;
 }
 
@@ -25,4 +27,6 @@ export interface Net {
   sendMove(state: PlayerState): void;
   /** Must not be dropped. */
   sendChat(text: string): void;
+  /** Move everybody to another room. Must not be dropped. */
+  sendGo(room: string, spawn: number, announce: string): void;
 }

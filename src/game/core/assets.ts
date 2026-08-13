@@ -39,9 +39,16 @@ export interface FontMeta {
   glyphs: Record<string, GlyphMeta>;
 }
 
+export interface Atlas {
+  image: HTMLImageElement;
+  sprites: Record<string, SpriteRect>;
+}
+
 export interface Assets {
   characters: Record<CharacterId, { meta: CharacterMeta; image: HTMLImageElement }>;
-  props: { image: HTMLImageElement; sprites: Record<string, SpriteRect> };
+  props: Atlas;
+  /** Outdoor art. Loaded after first paint, so the office is playable sooner. */
+  village: Atlas | null;
   /** 9px face: chat, speech bubbles, prompts. */
   font: { image: HTMLImageElement; meta: FontMeta };
   /** 7px face, used only for the understated name plates. */
@@ -92,9 +99,36 @@ export function loadAssets(): Promise<Assets> {
     return {
       characters,
       props: { image: propImage, sprites: propManifest.sprites },
+      village: null,
       font: { image: fontImage, meta: fontMeta },
       fontSmall: { image: fontSmallImage, meta: fontSmallMeta },
     };
   })();
   return cached;
+}
+
+
+let villagePromise: Promise<Atlas> | null = null;
+
+/**
+ * Loads the outdoor atlas. It is ~70 KB and only needed once somebody steps outside,
+ * so the office does not wait on it; the game kicks this off in the background right
+ * after startup and awaits it on the first transition, by which point it is usually
+ * already there.
+ */
+export function loadVillage(assets: Assets): Promise<Atlas> {
+  if (assets.village) return Promise.resolve(assets.village);
+  if (!villagePromise) {
+    villagePromise = (async () => {
+      const manifest = await loadJSON<{ image: string; sprites: Record<string, SpriteRect> }>(
+        "/assets/village.json",
+      );
+      const image = await loadImage(manifest.image);
+      return { image, sprites: manifest.sprites };
+    })();
+  }
+  return villagePromise.then((atlas) => {
+    assets.village = atlas;
+    return atlas;
+  });
 }

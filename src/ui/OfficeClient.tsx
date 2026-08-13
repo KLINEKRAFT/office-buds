@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { CHAT_HISTORY_LIMIT, MAX_MESSAGE_LEN } from "@/game/config";
+import { ANNOUNCE_MS, CHAT_HISTORY_LIMIT, MAX_MESSAGE_LEN } from "@/game/config";
 import { Game } from "@/game/game";
 import { STATUS_LABEL, type NetStatus } from "@/game/net";
 import type { ChatMessage } from "@/game/types";
@@ -47,6 +47,10 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
   const [shared, setShared] = useState(false);
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
+  const [place, setPlace] = useState("");
+  const [announce, setAnnounce] = useState("");
+  const [emotes, setEmotes] = useState<Array<{ clip: string; label: string; glyph: string }>>([]);
+  const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,11 +65,20 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
           roomCode,
           name: profile.name,
           character: profile.character,
+          // ?room=outside drops you straight into a place, for laying rooms out.
+          startRoom: new URLSearchParams(window.location.search).get("room") ?? undefined,
           onStatus: (s) => !cancelled && setStatus(s),
           onPeers: (n) => !cancelled && setPeers(n),
           onChat: (m) =>
             !cancelled &&
             setMessages((prev) => [...prev, m].slice(-CHAT_HISTORY_LIMIT)),
+          onPlace: (name) => !cancelled && setPlace(name),
+          onAnnounce: (text) => {
+            if (cancelled) return;
+            setAnnounce(text);
+            if (announceTimer.current) clearTimeout(announceTimer.current);
+            announceTimer.current = setTimeout(() => setAnnounce(""), ANNOUNCE_MS);
+          },
         });
         if (cancelled) {
           game.dispose();
@@ -75,6 +88,7 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
         // Entering the office was a real tap, so audio is allowed to start here.
         game.audio.unlock();
         game.start();
+        setEmotes(game.emotes);
         setPhase("ready");
       } catch (e) {
         if (cancelled) return;
@@ -85,6 +99,7 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
 
     return () => {
       cancelled = true;
+      if (announceTimer.current) clearTimeout(announceTimer.current);
       gameRef.current?.dispose();
       gameRef.current = null;
       game?.dispose();
@@ -149,7 +164,7 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
         <div className="hud">
           <div className="hud__topleft">
             <button type="button" className="chip chip--button" onClick={invite}>
-              {shared ? "LINK COPIED" : `OFFICE ${roomCode}`}
+              {shared ? "LINK COPIED" : `${place || "OFFICE"} \u00B7 ${roomCode}`}
             </button>
           </div>
 
@@ -167,6 +182,8 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
               ⚙
             </button>
           </div>
+
+          {announce && <div className="announce">{announce}</div>}
 
           {historyOpen && (
             <div className="history">
@@ -196,14 +213,17 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
                 <span className="round__glyph">▤</span>
                 LOG
               </button>
-              <button
-                type="button"
-                className="round"
-                onClick={() => gameRef.current?.wave()}
-              >
-                <span className="round__glyph">✋</span>
-                WAVE
-              </button>
+              {emotes.map((e) => (
+                <button
+                  key={e.clip}
+                  type="button"
+                  className="round"
+                  onClick={() => gameRef.current?.emote(e.clip)}
+                >
+                  <span className="round__glyph">{e.glyph}</span>
+                  {e.label}
+                </button>
+              ))}
               <button
                 type="button"
                 className="round round--chat"
@@ -280,7 +300,8 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
 
               <p className="hint">
                 Move with the on-screen stick, or WASD / arrow keys on a computer. Tap
-                CHAT to talk - your message floats above your head.
+                CHAT to talk - your message floats above your head. Say &quot;let&apos;s go
+                outside&quot; and everyone goes with you.
               </p>
 
               <a className="btn btn--ghost" href="/" style={{ textAlign: "center", textDecoration: "none" }}>

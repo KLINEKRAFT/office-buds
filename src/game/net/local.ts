@@ -5,7 +5,8 @@ type Msg =
   | { t: "hello" | "hello_ack"; id: string; name: string; character: CharacterId }
   | { t: "bye"; id: string }
   | ({ t: "m"; id: string } & PlayerState)
-  | { t: "c"; id: string; text: string; at: number };
+  | { t: "c"; id: string; text: string; at: number }
+  | { t: "g"; id: string; room: string; spawn: number; announce: string };
 
 /**
  * Same-browser multiplayer over BroadcastChannel.
@@ -85,11 +86,16 @@ export class LocalNet implements Net {
           dir: msg.dir,
           moving: msg.moving,
           emote: msg.emote,
+          room: msg.room,
         });
         break;
       case "c":
         if (!this.known.has(msg.id)) return;
         this.handlers?.onChat(msg.id, msg.text, msg.at);
+        break;
+      case "g":
+        if (!this.known.has(msg.id)) return;
+        this.handlers?.onGo(msg.id, msg.room, msg.spawn, msg.announce);
         break;
     }
   }
@@ -100,6 +106,10 @@ export class LocalNet implements Net {
 
   sendChat(text: string): void {
     this.post({ t: "c", id: this.id, text, at: Date.now() });
+  }
+
+  sendGo(room: string, spawn: number, announce: string): void {
+    this.post({ t: "g", id: this.id, room, spawn, announce });
   }
 
   private sayGoodbye = (): void => {

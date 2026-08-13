@@ -1,18 +1,20 @@
 import {
+  ANNOUNCE_MS,
   BUBBLE_MAX_MS,
   BUBBLE_MAX_W,
   BUBBLE_MIN_MS,
   BUBBLE_PER_CHAR_MS,
-  EMOTE_WAVE,
+  EMOTES,
   MAX_MESSAGE_LEN,
   NET_IDLE_RESEND_MS,
   PEER_TIMEOUT_MS,
   REMOTE_SMOOTHING,
   REMOTE_SNAP_DIST,
+  TRANSITION_MS,
   WALK_SPEED,
 } from "./config";
-import { emoteFinished } from "./core/anim";
-import { loadAssets, type Assets } from "./core/assets";
+import { availableEmotes, emoteFinished } from "./core/anim";
+import { loadAssets, loadVillage, type Assets } from "./core/assets";
 import { Audio } from "./core/audio";
 import { Camera } from "./core/camera";
 import { Input } from "./core/input";
@@ -20,8 +22,8 @@ import { Renderer } from "./render/renderer";
 import { createNet, type Net, type NetStatus } from "./net";
 import type { Bubble, ChatMessage, CharacterId, Dir, Player, PlayerState } from "./types";
 import { buildRoom, type BuiltRoom } from "./world/build";
-import { findFreeSpawn, moveWithCollision } from "./world/collision";
-import { getRoom } from "./world";
+import { bodyRect, findFreeSpawn, moveWithCollision } from "./world/collision";
+import { DEFAULT_ROOM, getRoom, matchSayTrigger } from "./world";
 
 export interface GameOptions {
   canvas: HTMLCanvasElement;
@@ -29,10 +31,14 @@ export interface GameOptions {
   roomCode: string;
   name: string;
   character: CharacterId;
-  roomId?: string;
+  startRoom?: string;
   onChat(message: ChatMessage): void;
   onStatus(status: NetStatus, detail?: string): void;
   onPeers(count: number): void;
+  /** Fires when the place changes, so the HUD can name it. */
+  onPlace(roomName: string): void;
+  /** A short banner, e.g. "COLIN TOOK EVERYONE OUTSIDE". */
+  onAnnounce(text: string): void;
 }
 
 function uid(): string {
@@ -41,6 +47,10 @@ function uid(): string {
 
 function bubbleDuration(text: string): number {
   return Math.min(BUBBLE_MAX_MS, BUBBLE_MIN_MS + text.length * BUBBLE_PER_CHAR_MS);
+}
+
+function overlaps(a: { x: number; y: number; w: number; h: number }, b: typeof a): boolean {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 export class Game {
@@ -57,17 +67,29 @@ export class Game {
   private readonly net: Net;
   readonly audio = new Audio();
 
+  private room: BuiltRoom;
   private lastSent: PlayerState | null = null;
   private lastSentAt = 0;
   private lastStepPhase = -1;
   private localSpeed = 0;
   private resizeObserver: ResizeObserver | null = null;
 
+  /** 0 clear, 1 black. Room changes fade out, swap, fade back in. */
+  private fade = 0;
+  private pending: { to: string; spawn: number } | null = null;
+  /**
+   * Stops an exit firing the instant you arrive. Starts non-zero because a spawn can
+   * legitimately sit close to a doorway, and stepping through it on frame one would
+   * bounce you straight back out.
+   */
+  private exitCooldown = 0.9;
+
   private constructor(
     private readonly opts: GameOptions,
     private readonly assets: Assets,
-    private readonly room: BuiltRoom,
+    room: BuiltRoom,
   ) {
+    this.room = room;
     const id = uid();
     const spawn = room.def.spawns[Math.floor(Math.random() * room.def.spawns.length)] ?? {
       x: room.width / 2,
@@ -85,7 +107,8 @@ export class Game {
       renderY: free.y,
       dir: "down",
       moving: false,
-      emote: 0,
+      emote: "",
+      room: room.def.id,
       animTime: 0,
       emoteTime: 0,
       bubble: null,
@@ -100,7 +123,11 @@ export class Game {
 
   static async create(opts: GameOptions): Promise<Game> {
     const assets = await loadAssets();
-    const room = buildRoom(getRoom(opts.roomId ?? "office"), assets);
+    const def = getRoom(opts.startRoom ?? DEFAULT_ROOM);
+    // Starting room's art has to be in hand before it can be built. Normally that is
+    // the office, whose atlas came with loadAssets; ?room=outside needs the other one.
+    if (def.atlas === "village") await loadVillage(assets);
+    const room = buildRoom(def, assets);
     const game = new Game(opts, assets, room);
     await game.init();
     return game;
@@ -108,8 +135,6 @@ export class Game {
 
   private async init(): Promise<void> {
     this.input.attach(this.opts.surface);
-    // ?debug=1 outlines every collider and ?scale=N pins the zoom - both exist so a
-    // new room can be laid out and checked without editing code.
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       this.renderer.debugColliders = params.has("debug");
@@ -123,6 +148,10 @@ export class Game {
     window.addEventListener("orientationchange", this.handleResize);
 
     this.camera.snapTo(this.local.renderX, this.local.renderY);
+    this.opts.onPlace(this.room.def.name);
+
+    // Pull the outdoor atlas in the background so stepping outside is instant.
+    void loadVillage(this.assets).catch(() => {});
 
     await this.net.connect({
       onStatus: (status, detail) => this.opts.onStatus(status, detail),
@@ -139,7 +168,8 @@ export class Game {
           renderY: spawn.y,
           dir: "down",
           moving: false,
-          emote: 0,
+          emote: "",
+          room: this.local.room,
           animTime: 0,
           emoteTime: 0,
           bubble: null,
@@ -147,8 +177,7 @@ export class Game {
         });
         this.audio.join();
         this.reportPeers();
-        // Make sure the newcomer sees where we are straight away.
-        this.lastSent = null;
+        this.lastSent = null; // push our position so the newcomer sees us
       },
       onLeave: (id) => {
         if (!this.players.delete(id)) return;
@@ -161,27 +190,41 @@ export class Game {
         if (!p) return;
         p.dir = state.dir;
         p.moving = state.moving;
+        p.room = state.room;
         p.lastSeen = Date.now();
         if (state.emote && state.emote !== p.emote) {
           p.emote = state.emote;
           p.emoteTime = 0;
         } else if (!state.emote) {
-          p.emote = 0;
+          p.emote = "";
         }
         this.targets.set(id, { x: state.x, y: state.y });
+        this.reportPeers();
       },
       onChat: (id, text, at) => {
         const p = this.players.get(id);
         if (!p) return;
         this.showBubble(p, text);
-        this.audio.receiveMessage();
+        // Only chime for people you are actually standing with.
+        if (p.room === this.local.room) this.audio.receiveMessage();
         this.opts.onChat({ id: uid(), playerId: id, name: p.name, text, at, own: false });
+      },
+      onGo: (id, room, spawn, announce) => {
+        const p = this.players.get(id);
+        // Somebody in another room deciding to move is not our business.
+        if (p && p.room !== this.local.room) return;
+        if (announce) this.opts.onAnnounce(announce.replace("{name}", p?.name ?? "SOMEONE"));
+        this.beginTransition(room, spawn);
       },
     });
   }
 
   private reportPeers(): void {
-    this.opts.onPeers(this.players.size - 1);
+    let here = 0;
+    for (const p of this.players.values()) {
+      if (p.id !== this.local.id && p.room === this.local.room) here++;
+    }
+    this.opts.onPeers(here);
   }
 
   private handleResize = (): void => {
@@ -198,10 +241,9 @@ export class Game {
     this.last = performance.now();
     const tick = (now: number) => {
       if (!this.running) return;
-      // Clamp so a backgrounded tab does not teleport everyone on return.
       const dt = Math.min(0.05, Math.max(0, (now - this.last) / 1000));
       this.last = now;
-      this.update(dt, now);
+      this.update(dt);
       this.raf = requestAnimationFrame(tick);
     };
     this.raf = requestAnimationFrame(tick);
@@ -212,8 +254,76 @@ export class Game {
     cancelAnimationFrame(this.raf);
   }
 
-  private update(dt: number, now: number): void {
-    this.updateLocal(dt);
+  // ---- room changes --------------------------------------------------------
+
+  /** Starts a fade; the actual swap happens once the screen is covered. */
+  private beginTransition(to: string, spawn: number): void {
+    if (this.pending) return;
+    this.pending = { to, spawn };
+    // Kick the atlas load now so the fade covers the download too.
+    void loadVillage(this.assets).catch(() => {});
+  }
+
+  private applyTransition(): boolean {
+    const target = this.pending;
+    if (!target) return true;
+    const def = getRoom(target.to);
+    // Wait, still covered, if the room's art has not arrived yet.
+    if (def.atlas === "village" && !this.assets.village) return false;
+
+    this.room = buildRoom(def, this.assets);
+    this.camera.setRoom(this.room.width, this.room.height);
+
+    const spawn = this.room.def.spawns[target.spawn] ?? this.room.def.spawns[0];
+    const free = findFreeSpawn(this.room, spawn.x, spawn.y);
+    const p = this.local;
+    p.x = p.renderX = free.x;
+    p.y = p.renderY = free.y;
+    p.room = def.id;
+    p.dir = "down";
+    p.moving = false;
+    p.emote = "";
+
+    // Anyone still elsewhere keeps their own position; we simply stop drawing them.
+    this.camera.snapTo(p.renderX, p.renderY);
+    this.exitCooldown = 0.9;
+    this.pending = null;
+    this.lastSent = null;
+    this.opts.onPlace(def.name);
+    this.reportPeers();
+    return true;
+  }
+
+  private checkExits(): void {
+    if (this.exitCooldown > 0 || this.pending) return;
+    const body = bodyRect(this.local.x, this.local.y);
+    for (const exit of this.room.def.exits ?? []) {
+      if (overlaps(body, exit.rect)) {
+        this.beginTransition(exit.to, exit.spawn ?? 0);
+        return;
+      }
+    }
+  }
+
+  // ---- frame ----------------------------------------------------------------
+
+  private update(dt: number): void {
+    this.exitCooldown = Math.max(0, this.exitCooldown - dt);
+
+    // Fade out, swap, fade back in. Holding at 1 covers a slow atlas load.
+    const step = dt / (TRANSITION_MS / 1000);
+    if (this.pending) {
+      this.fade = Math.min(1, this.fade + step);
+      if (this.fade >= 1) this.applyTransition();
+    } else if (this.fade > 0) {
+      this.fade = Math.max(0, this.fade - step);
+    }
+
+    const frozen = this.pending !== null;
+    if (!frozen) {
+      this.updateLocal(dt);
+      this.checkExits();
+    }
     this.updateRemotes(dt);
     this.expireBubbles(Date.now());
     this.evictStalePeers(Date.now());
@@ -221,16 +331,19 @@ export class Game {
     this.camera.update(this.local.renderX, this.local.renderY, dt);
     this.maybeSend();
 
+    // Only draw people standing in the same place as you.
+    const here = [...this.players.values()].filter((p) => p.room === this.local.room);
+
     this.renderer.render(
       this.room,
       this.camera,
-      [...this.players.values()],
+      here,
       this.local.id,
       this.localSpeed,
       this.input.usingTouch ? this.input.stick() : null,
       Date.now(),
+      this.fade,
     );
-    void now;
   }
 
   private updateLocal(dt: number): void {
@@ -239,12 +352,12 @@ export class Game {
     const mag = Math.hypot(v.x, v.y);
     this.localSpeed = mag * WALK_SPEED;
 
-    // An emote plays through without interrupting movement.
     if (p.emote) {
       p.emoteTime += dt;
       const meta = this.assets.characters[p.character].meta;
-      if (emoteFinished(meta, p.emote, p.emoteTime)) {
-        p.emote = 0;
+      // Moving puts the laptop away.
+      if (mag > 0 || emoteFinished(meta, p.emote, p.emoteTime)) {
+        p.emote = "";
         p.emoteTime = 0;
       }
     }
@@ -260,7 +373,8 @@ export class Game {
       const actuallyMoved = moved.x !== p.x || moved.y !== p.y;
       p.x = moved.x;
       p.y = moved.y;
-      p.dir = Math.abs(v.x) >= Math.abs(v.y) ? (v.x < 0 ? "left" : "right") : v.y < 0 ? "up" : "down";
+      p.dir =
+        Math.abs(v.x) >= Math.abs(v.y) ? (v.x < 0 ? "left" : "right") : v.y < 0 ? "up" : "down";
       p.moving = actuallyMoved;
     } else {
       p.moving = false;
@@ -270,12 +384,9 @@ export class Game {
     p.renderY = p.y;
     p.animTime += dt;
 
-    // Two footfalls per eight-frame cycle, on the contact frames.
     if (p.moving) {
       const phase = Math.floor(p.animTime * 11) % 8;
-      if ((phase === 1 || phase === 5) && phase !== this.lastStepPhase) {
-        this.audio.step();
-      }
+      if ((phase === 1 || phase === 5) && phase !== this.lastStepPhase) this.audio.step();
       this.lastStepPhase = phase;
     } else {
       this.lastStepPhase = -1;
@@ -283,7 +394,6 @@ export class Game {
   }
 
   private updateRemotes(dt: number): void {
-    // Smoothly chase the last received position rather than snapping to each packet.
     const k = 1 - Math.exp(-REMOTE_SMOOTHING * dt);
     for (const p of this.players.values()) {
       if (p.id === this.local.id) continue;
@@ -292,7 +402,7 @@ export class Game {
         p.emoteTime += dt;
         const meta = this.assets.characters[p.character].meta;
         if (emoteFinished(meta, p.emote, p.emoteTime)) {
-          p.emote = 0;
+          p.emote = "";
           p.emoteTime = 0;
         }
       }
@@ -346,6 +456,7 @@ export class Game {
       dir: p.dir,
       moving: p.moving,
       emote: p.emote,
+      room: p.room,
     };
     const prev = this.lastSent;
     const now = performance.now();
@@ -354,10 +465,10 @@ export class Game {
       prev.dir !== state.dir ||
       prev.moving !== state.moving ||
       prev.emote !== state.emote ||
+      prev.room !== state.room ||
       Math.abs(prev.x - state.x) > 0.4 ||
       Math.abs(prev.y - state.y) > 0.4;
 
-    // Heartbeat even when idle so anyone who joins late learns where we are standing.
     if (!changed && now - this.lastSentAt < NET_IDLE_RESEND_MS) return;
 
     this.lastSent = state;
@@ -366,13 +477,12 @@ export class Game {
   }
 
   private showBubble(player: Player, text: string): void {
-    const bubble: Bubble = {
+    player.bubble = {
       text,
       lines: this.renderer.font.wrap(text, BUBBLE_MAX_W),
       born: Date.now(),
       duration: bubbleDuration(text),
-    };
-    player.bubble = bubble;
+    } satisfies Bubble;
   }
 
   // ---- public API used by the React shell --------------------------------
@@ -391,12 +501,31 @@ export class Game {
       at: Date.now(),
       own: true,
     });
+
+    // Saying the magic words takes the whole room with you.
+    const trigger = matchSayTrigger(this.room.def, text);
+    if (trigger) {
+      const announce = trigger.announce.replace("{name}", this.local.name);
+      this.net.sendGo(trigger.to, trigger.spawn ?? 0, trigger.announce);
+      this.opts.onAnnounce(announce);
+      // Let the bubble land before the screen goes dark.
+      window.setTimeout(() => this.beginTransition(trigger.to, trigger.spawn ?? 0), 650);
+    }
   }
 
-  wave(): void {
-    this.local.emote = EMOTE_WAVE;
+  emote(clip: string): void {
+    const meta = this.assets.characters[this.local.character].meta;
+    if (!meta.clips[clip]) return;
+    this.local.emote = clip;
     this.local.emoteTime = 0;
-    this.lastSent = null; // push the emote out on the next tick
+    this.lastSent = null;
+  }
+
+  /** Emotes this player's character actually has art for. */
+  get emotes(): Array<{ clip: string; label: string; glyph: string }> {
+    const meta = this.assets.characters[this.local.character].meta;
+    const have = new Set(availableEmotes(meta, EMOTES.map((e) => e.clip)));
+    return EMOTES.filter((e) => have.has(e.clip));
   }
 
   /** Called when a text field takes focus, so held keys do not stick. */
@@ -408,8 +537,8 @@ export class Game {
     return this.local.id;
   }
 
-  get localCharacter(): CharacterId {
-    return this.local.character;
+  get placeName(): string {
+    return this.room.def.name;
   }
 
   get facing(): Dir {
@@ -425,3 +554,5 @@ export class Game {
     this.audio.dispose();
   }
 }
+
+export { ANNOUNCE_MS };
