@@ -476,6 +476,8 @@ npm run assets
 - `tools/build_village.py` — the outdoor atlas: props scaled against the 40px character,
   desaturated to sit beside the office, and grass cut as 16 crops so it does not repeat
 - `tools/build_font.py` — rasterises the two bitmap fonts
+- `tools/build_version.py` — stamps a digest of everything in `public/assets/` into
+  `ASSET_VERSION`, which every asset request carries as `?v=`
 - `tools/pixelpng.py` — shared indexed-PNG writer; refuses images with partial alpha and
   verifies what it wrote still matches the source
 
@@ -491,6 +493,23 @@ Two notes on the outdoor art, both learned the hard way:
   decorative patch with transparent edges, and its "water tile" is a chevron rune that
   repeats into obvious wallpaper. Both are authored in `build_village.py` from colours
   sampled out of those same files. The grass is real, and is used.
+
+### Why the atlases are versioned
+
+Every atlas is served from a fixed path — `/assets/props.json`, `/assets/props.png`. That
+is fine until the art changes, at which point a browser holding a cached copy of one of
+them pairs it with freshly deployed code, and the game dies on startup with
+`room "office" references unknown sprite "wall_grey_side"` — a true statement about a file
+that is perfectly correct on the server.
+
+That shipped. Now `npm run assets` hashes everything in `public/assets/` into
+`ASSET_VERSION`, every request carries it as `?v=`, and the cache header says `immutable`
+because it finally can: a URL's contents genuinely cannot change any more. A stale copy is
+unreachable rather than merely unlikely.
+
+`tests/world.test.mjs` re-derives the digest and fails if it does not match the files, so
+rebuilding the art and forgetting to re-stamp it breaks the build rather than shipping a
+cache mismatch to a phone.
 
 ## Credits
 

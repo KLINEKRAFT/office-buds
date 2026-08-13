@@ -8,12 +8,15 @@
  * disappears behind it.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { check, report, suite } from "./harness.mjs";
 import { office } from "../.testbuild/world/office.js";
 import { grove } from "../.testbuild/world/grove.js";
 import { roomColliders } from "../.testbuild/world/build.js";
+import { ASSET_VERSION } from "../.testbuild/core/assetVersion.js";
 
 const load = (name) =>
   JSON.parse(readFileSync(new URL(`../public/assets/${name}`, import.meta.url)));
@@ -381,6 +384,31 @@ check("the seat is reachable, not just standable", () => {
       `seat "${seat.id}" cannot be walked to`,
     );
   }
+});
+
+suite("the art that ships matches the art that is stamped");
+
+check("ASSET_VERSION is the digest of what is actually in public/assets", () => {
+  /*
+   * Every atlas is served from a fixed path, so the only thing making a stale cached
+   * copy unreachable is the ?v= on the request. Rebuild the art and forget to re-stamp
+   * it, and browsers keep serving themselves yesterday's atlas against today's code -
+   * which is how the game came to die on startup naming a sprite that was present and
+   * correct on the server. Mirrors tools/build_version.py exactly.
+   */
+  const dir = fileURLToPath(new URL("../public/assets", import.meta.url));
+  const h = createHash("sha256");
+  for (const name of readdirSync(dir).sort()) {
+    const path = `${dir}/${name}`;
+    if (!statSync(path).isFile()) continue;
+    h.update(name);
+    h.update(readFileSync(path));
+  }
+  assert.equal(
+    ASSET_VERSION,
+    h.digest("hex").slice(0, 12),
+    "the atlases have changed since they were stamped - run `npm run assets`",
+  );
 });
 
 report();
