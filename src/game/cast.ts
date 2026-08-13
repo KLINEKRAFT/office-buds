@@ -1,3 +1,4 @@
+import { FALLBACK_CHARACTER } from "./net/identity";
 import type { CharacterId } from "./types";
 
 /**
@@ -33,7 +34,7 @@ export const CAST: CastMember[] = [
 ];
 
 /** Anyone not on the list still gets in, as a guest wearing this character. */
-const UNKNOWN_CHARACTER: CharacterId = "michael";
+const UNKNOWN_CHARACTER: CharacterId = FALLBACK_CHARACTER;
 
 /** First name only - "Colin Kline" and "colin" are the same person walking in. */
 function normalize(raw: string): string {

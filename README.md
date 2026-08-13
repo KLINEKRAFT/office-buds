@@ -137,8 +137,8 @@ no visible change. The furniture atlas keeps its original anti-aliased edges and
 as RGBA.
 
 **Adding one.** Drop the five sheets in `art-source/characters/`, run
-`python3 tools/build_sprites.py`, then add a line to `CAST` in `src/game/cast.ts` tying a
-name to it. Nothing else needs to change — the entry screen, the name plate and the seat
+`python3 tools/build_sprites.py`, add the id to `CHARACTER_IDS` in `src/game/types.ts`,
+then add a line to `CAST` in `src/game/cast.ts` tying a name to it. Nothing else needs to change — the entry screen, the name plate and the seat
 assignment all read from that list. A name that is not on the list still gets in, as a
 visitor on the default sprite, so an invite never dead-ends on a typo.
 
@@ -224,6 +224,23 @@ started there walked straight back out on their first input.
 
 Laying out a room is easier with `?debug=1` (outlines every collider) and `?scale=N`
 (pins the zoom, e.g. `?scale=2` to see a whole room at once).
+
+### Who somebody is
+
+Both transports decode an arriving peer through one function, `src/game/net/identity.ts`,
+checked against `CHARACTER_IDS` — which is a runtime list with the `CharacterId` type
+derived from it, rather than a hand-written union sitting alongside a separate list.
+
+That shape was earned. The Supabase driver used to decode peers inline with a test
+written when the cast was two people: anything that was not `michael` became `colin`. So
+over a real connection Alexis, Melanie and Tiffany all arrived wearing Colin's sprite
+while looking correct on their own screen. Every automated test passed, because they all
+run the same-browser driver, which had its own copy of the logic and no bug.
+
+`npm test` covers that decoder — every character round-tripping as itself, and unknown,
+missing and malformed input falling back rather than being clamped onto a real character.
+It needs no socket, which is the point: the bug lived in the one path that could not be
+reached from a test.
 
 ### Realtime
 
