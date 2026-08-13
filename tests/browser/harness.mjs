@@ -11,9 +11,19 @@
  * makes "does everybody see everybody correctly" testable at all from here.
  */
 import { spawn } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 
-export const PORT = 3210;
+/** The repo root, so the server starts there whatever directory the caller was in. */
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+/**
+ * Fixed by default so a stray server is obvious rather than mysterious, but overridable:
+ * a container can end up with a port wedged by a process that outlived its shell, and
+ * "pick another one" beats spending ten minutes on a port you do not care about.
+ */
+export const PORT = Number(process.env.BUDS_TEST_PORT || 3210);
 export const BASE = `http://127.0.0.1:${PORT}`;
 
 /** A portrait phone, which is the shape this game is designed for. */
@@ -34,6 +44,7 @@ export async function startServer() {
   const proc = spawn("npx", ["next", "start", "-p", String(PORT)], {
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env },
+    cwd: ROOT,
     detached: true,
   });
   proc.stopServer = () => stopServer(proc);
