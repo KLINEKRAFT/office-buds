@@ -224,6 +224,16 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
         <div className="loading">
           <span>COULD NOT START</span>
           <span style={{ color: "#c5c3be", letterSpacing: 0 }}>{error}</span>
+          {/* Startup failures are nearly always something that did not load. A reload is
+              the fix often enough to be worth a button, and staring at an error with no
+              way forward is the worst version of this screen. */}
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => window.location.reload()}
+          >
+            Try again
+          </button>
         </div>
       )}
 

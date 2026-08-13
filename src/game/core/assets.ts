@@ -1,4 +1,14 @@
+import { ASSET_VERSION } from "./assetVersion";
 import type { CharacterId } from "../types";
+
+/**
+ * Every atlas is served from a fixed path, so the only thing that can make a stale copy
+ * unreachable is the query string. Without this a browser holds a cached props.json for
+ * an hour, pairs it with code deployed a minute ago, and the game dies on startup
+ * naming a sprite that is perfectly present on the server. That is not a hypothetical -
+ * it is what "unknown sprite wall_grey_side" was.
+ */
+const versioned = (url: string) => `${url}?v=${ASSET_VERSION}`;
 
 export interface ClipMeta {
   start: number;
@@ -60,12 +70,12 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error(`failed to load ${src}`));
-    img.src = src;
+    img.src = versioned(src);
   });
 }
 
 async function loadJSON<T>(src: string): Promise<T> {
-  const res = await fetch(src);
+  const res = await fetch(versioned(src));
   if (!res.ok) throw new Error(`failed to load ${src}: ${res.status}`);
   return (await res.json()) as T;
 }

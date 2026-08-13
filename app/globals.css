@@ -687,10 +687,17 @@ button {
   justify-content: center;
   flex-direction: column;
   gap: 10px;
+  padding: 24px;
+  text-align: center;
   background: var(--ink);
   color: var(--cream-dim);
   font-size: 11px;
   letter-spacing: 0.22em;
+}
+
+.loading .btn {
+  margin-top: 6px;
+  letter-spacing: 0.12em;
 }
 
 @media (min-width: 720px) {

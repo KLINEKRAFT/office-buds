@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "assets": "python3 tools/build_sprites.py && python3 tools/build_office.py && python3 tools/build_village.py && python3 tools/build_font.py && python3 tools/build_icon.py",
+    "assets": "python3 tools/build_sprites.py && python3 tools/build_office.py && python3 tools/build_village.py && python3 tools/build_font.py && python3 tools/build_icon.py && python3 tools/build_version.py",
     "test": "npm run test:build && node tests/run.mjs",
     "test:build": "tsc -p tsconfig.test.json && node tools/esm_fixup.mjs .testbuild",
     "test:browser": "npm run build && node tests/browser/game.test.mjs"
