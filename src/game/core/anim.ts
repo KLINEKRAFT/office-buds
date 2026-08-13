@@ -1,5 +1,6 @@
 import { FRAME, WALK_FPS_AT_FULL_SPEED, WALK_SPEED } from "../config";
 import type { CharacterMeta } from "./assets";
+import { frameRect, procPose, procSeconds, resolveEmote } from "./emotes";
 import type { Dir, Player } from "../types";
 
 export interface Pose {
@@ -8,8 +9,12 @@ export interface Pose {
   sy: number;
   /** Mirror horizontally (the side walk is authored facing right only). */
   flip: boolean;
-  /** Extra vertical offset for the breathing bob on single-frame idles. */
+  /** Vertical offset: the breathing bob on single-frame idles, or a hop leaving the floor. */
   bob: number;
+  /** Horizontal offset, used by the synthesised emotes that sway or jitter. */
+  dx: number;
+  /** Radians about the feet. Only a faint uses it. */
+  rot: number;
 }
 
 function suffix(dir: Dir): "up" | "down" | "side" {
@@ -19,16 +24,30 @@ function suffix(dir: Dir): "up" | "down" | "side" {
 }
 
 /**
- * Picks the clip and frame for a player. Emotes win over everything, then walking,
- * then idling. Side-facing clips are authored walking right and mirrored for left.
+ * Picks the clip and frame for a player. Emotes win over everything, then carrying,
+ * then walking, then idling. Side-facing clips are authored walking right and mirrored
+ * for left.
+ *
+ * An emote is resolved through `resolveEmote`, so the same button plays a hand-drawn
+ * clip for whoever has one and a synthesised stand-in for whoever does not.
  */
 export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pose {
   const flip = player.dir === "left";
   let clipName: string;
   let time: number;
 
-  if (player.emote && meta.clips[player.emote]) {
-    clipName = player.emote;
+  const emote = player.emote ? resolveEmote(meta, player.emote) : null;
+
+  if (emote?.kind === "proc") {
+    const pose = procPose(emote.name, player.emoteTime, meta, player.dir);
+    if (pose) {
+      const { sx, sy } = frameRect(meta, pose.frame);
+      return { sx, sy, flip: pose.flip, bob: pose.dy, dx: pose.dx, rot: pose.rot };
+    }
+  }
+
+  if (emote?.kind === "art") {
+    clipName = emote.name;
     time = player.emoteTime;
   } else if (player.carrying >= 0 && !player.moving && meta.clips.lift) {
     // Standing still holding something: hold the last frame of the lift, which ends with
@@ -36,11 +55,14 @@ export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pos
     // ordinary walk cycle, because there is no carry-walk art and arms-up-while-striding
     // looks worse than arms-down-while-carrying.
     const lift = meta.clips.lift;
+    const last = lift.start + lift.count - 1;
     return {
-      sx: ((lift.start + lift.count - 1) % meta.cols) * FRAME,
-      sy: Math.floor((lift.start + lift.count - 1) / meta.cols) * FRAME,
+      sx: (last % meta.cols) * FRAME,
+      sy: Math.floor(last / meta.cols) * FRAME,
       flip,
       bob: 0,
+      dx: 0,
+      rot: 0,
     };
   } else if (player.moving) {
     clipName = `walk_${suffix(player.dir)}`;
@@ -72,24 +94,24 @@ export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pos
     sy: Math.floor(frame / meta.cols) * FRAME,
     flip,
     bob,
+    dx: 0,
+    rot: 0,
   };
 }
 
 /**
  * Emotes that hold on their last frame - the laptop, say - stay until the player moves
- * or triggers something else, rather than snapping back after a second.
+ * or triggers something else, rather than snapping back after a second. A faint does the
+ * same thing through `procSeconds` returning Infinity.
  */
 const HOLD_FOREVER = new Set(["laptop"]);
 
 export function emoteFinished(meta: CharacterMeta, emote: string, time: number): boolean {
   if (!emote) return true;
-  const clip = meta.clips[emote];
-  if (!clip) return true;
-  if (HOLD_FOREVER.has(emote)) return false;
-  return time >= clip.count / clip.fps;
-}
-
-/** Emote clip names this character actually has art for. */
-export function availableEmotes(meta: CharacterMeta, candidates: string[]): string[] {
-  return candidates.filter((c) => Boolean(meta.clips[c]));
+  const resolved = resolveEmote(meta, emote);
+  if (!resolved) return true;
+  if (resolved.kind === "proc") return time >= procSeconds(resolved.name);
+  if (HOLD_FOREVER.has(resolved.name)) return false;
+  const clip = meta.clips[resolved.name];
+  return !clip || time >= clip.count / clip.fps;
 }

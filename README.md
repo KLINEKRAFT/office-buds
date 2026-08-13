@@ -21,13 +21,17 @@ is Colin, Michael, Alexis, Melanie and Tiffany; anyone else gets in as a guest.
 - **Desktop** — WASD or the arrow keys.
 - **CHAT** opens the composer. What you send floats above your head for a few seconds
   (longer messages linger longer) and your friend sees it in real time.
-- **WAVE**, **JUMP** and **LAPTOP** — emote buttons only appear for animations that
-  character actually has art for, so a character with no wave sheet simply has no button.
+- **EMOTE** opens a tray: wave, jump, dance, spin, panic, faint — and, for whoever has
+  the sheet for it, work at a laptop. Everybody gets at least six. Where a character has
+  hand-drawn art it plays; where they do not, the same button plays a version
+  synthesised from frames every character has (see *Emotes* below).
 - **LOG** shows recent messages, so nothing is lost once a bubble fades.
 - **PICK UP** appears when you are standing next to something you can lift. You then
   carry it over your head until you put it down, and everyone sees you holding it.
 - Walk onto a chair to sit in it, or in behind the desk to sit at it.
-- Walk out through the doorway to reach the grove on your own. Or say **"let's go
+- Doors open as you walk up to them and shut behind you. Nothing about that crosses the
+  network — every screen works it out from positions it already has.
+- **Take the lift** in reception to reach the grove on your own. Or say **"let's go
   outside"** and the whole room goes with you; say **"back to work"** out there to march
   everyone back in. The cottage is the way back.
 - The office code in the top-left copies (or opens the share sheet for) the invite link.
@@ -46,6 +50,13 @@ whole list and adding one is a single line.
 | earthquake | The room shakes |
 | congrats | Confetti |
 | hi, bye | You wave |
+| dance, spin, panic, faint | You do exactly that |
+| synergy, circle back, bandwidth… | The whole room faints |
+| reply all | The whole room panics |
+| all hands, another meeting | You faint |
+| friday | You dance. monday does the other thing |
+| im dead, dying | You hit the floor |
+| works on my machine | You spin, helplessly |
 | standup, coffee, deploy | A banner, for the people who need to know |
 
 Out in the grove there is a second set, and those are gated — see *The grove* below.
@@ -54,11 +65,14 @@ Moods stick until somebody changes them; bursts play out and end. Both reach eve
 the room, and nothing outside it — walking out of a party does not take the lighting with
 you.
 
-The disruptive ones are `exact: true`, meaning the whole message has to be the phrase.
+Anything that takes something away from other people — ending the session, or puppeting
+everyone's character — is `exact: true`, meaning the whole message has to be the phrase.
 That distinction was earned: as substrings, "leave" ended the session every time somebody
 said they had to go, "raise" rained confetti on anyone raising a ticket, and "status" and
-"coffee" kept a banner on screen through an entire standup. Anything that interrupts
-other people has to be typed deliberately.
+"coffee" kept a banner on screen through an entire standup. The lights and the confetti
+stay loose on purpose — setting those off mid-sentence is the joke. `tests/chatmagic.test.mjs`
+holds the line by running an ordinary conversation past the whole table and failing if
+anything fires.
 
 ## Running it
 
@@ -153,6 +167,39 @@ some sit 15-20px high, which at 1/16 scale leaves a character hovering above the
 shadow. The builder measures each character once and drops every one of their frames by
 the same amount, which closes the gap without disturbing the shared anchor.
 
+### Emotes, for everybody
+
+Colin has a wave, a laptop and a jump because those sheets were drawn. Michael has a
+wave. Alexis, Melanie and Tiffany have six locomotion clips each and nothing else.
+
+For a while the HUD read the atlas manifest directly and offered only what a character
+had art for, which sounds principled and meant that three of the five people in the game
+could do nothing but walk. They got two buttons; Colin got five. That is not a missing
+animation, it is most of the cast being second-class in a game about hanging out.
+
+Drawing three more sets of sheets is the honest fix and was not available. The other one
+is `src/game/core/emotes.ts`: emotes **synthesised** from frames every character already
+has. A spin is the four facings played in order. A hop is the idle frame on a parabola,
+with the shadow deliberately left on the floor. Panic is the side-walk at double speed,
+mirrored every eighth of a second. A faint is a quarter turn about the feet — which is a
+transpose, so the sprite that holds on screen is pixel-for-pixel the original.
+
+Every emote button resolves through one function:
+
+```ts
+resolveEmote(meta, "jump")   // colin   -> { kind: "art",  name: "jump" }
+                             // melanie -> { kind: "proc", name: "hop"  }
+```
+
+Hand-drawn art always wins where it exists, and the name that travels over the network is
+the button's, not the implementation's — so Colin's eight-frame jump and Melanie's
+parabola are the same gesture to everyone watching. Everybody now has at least six.
+
+`tests/emotes.test.mjs` walks every synthesised emote frame by frame, for every character
+in the real manifest, and fails if any of them indexes a frame outside that character's
+own atlas. The arithmetic is the risky part: an off-by-one there draws somebody else's
+sprite, and it would look like a glitch rather than a bug.
+
 ### The grove
 
 Outside used to be a whole village. Nobody explored it — they stood in it and talked, and
@@ -215,6 +262,36 @@ which is what stops sixteen crops of grass falling into a visible repeat; a floo
 can instead name a nine-slice set (`nine: "rug"`) when it wants a visible hem, which a
 tile swap cannot give you.
 
+#### Walls, and sections
+
+The office is four sections on one floor — reception with the lift, open plan, Colin's
+office, and the break room — divided by `walls`, runs of tiles with doorway gaps in them.
+
+A wall is cut into one segment per tile and depth sorted with everything else, rather
+than baked into the background the way the top-edge band is. That matters because you
+walk round both sides of an interior wall, and it is what makes a *vertical* run work at
+all: each tile needs its own sort key, or the whole run flips in front of you at once as
+you walk down beside it.
+
+A wall is 32px of art standing on a 16px tile, so it covers the tile behind it as well as
+its own. That is not a problem to design around — a character is 40px, so somebody in
+that strip shows their head and shoulders over the top of the partition, which is what
+standing behind a wall looks like. It does mean furniture placed there gets its top
+painted over, so `tests/world.test.mjs` fails the build if any prop's anchor lands inside
+a wall's band. That check exists because the failure is completely silent otherwise: the
+prop is drawn, and then it is not there.
+
+#### Doors
+
+Doors come from LimeZu's Modern Interiors, because Modern Office has 339 sprites in it
+and not one of them is a door. They are four frames per door — shut, and three stages of
+swinging open — and the renderer picks between them by how close the nearest person is.
+
+Nothing about that is on the wire. Every client already knows where everybody is, so
+every client reaches the same frame on the same tick without a byte being sent, and a
+late joiner sees the doors in the right state immediately. It is the same idea as
+`carrying`: derive it from what is already replicated rather than replicate it again.
+
 ### Sitting down, without any sitting art
 
 Nobody has a sitting animation and none is needed. In a front-on perspective, furniture
@@ -227,10 +304,12 @@ the sofa beside it, so a meeting looks like a meeting the moment both people are
 sofas are deliberately not solid, which makes this something you can also do on purpose —
 walk onto a sofa and you are sitting on it.
 
-The office is sized against a portrait phone rather than for looks: 144x240 world px,
-which is very nearly one screenful, so the camera only ever drifts a few pixels and
-nothing important is ever off-frame. With two people in the room the camera frames the
-group rather than following one person, or you would be talking to someone off screen.
+The office is 176x448 world px — one phone screen wide and about three deep, so the
+camera travels as you walk the floor and each section arrives as you come through its
+door. It was one 160x240 room for a while, which fitted on a screen entirely and was
+right when there was one desk in it; "one room" and "an office" turned out to be
+different things. With two people in the room the camera frames the group rather than
+following one person, or you would be talking to someone off screen.
 
 ### Going places
 
@@ -303,6 +382,45 @@ Synthesised at runtime with WebAudio — footsteps, message blips, join and leav
 a very quiet HVAC hum. No audio files, nothing to download. Audio can only start from a
 real tap, which is what the "Enter office" button is for. There is a mute toggle in
 settings.
+
+## Testing
+
+```bash
+npm test            # fast, no browser
+npm run test:browser  # builds, then drives five tabs of real Chromium
+npm run typecheck
+```
+
+`npm test` compiles `src/game` to `.testbuild/` and runs four suites over the real
+committed atlases, so a test failing means the shipped art and the shipped code disagree
+— not that a fixture is stale:
+
+- **identity** — the peer decoder, round-tripping every character
+- **emotes** — every character can play everything their HUD offers, and no synthesised
+  frame indexes outside that character's atlas
+- **chatmagic** — the phrase table, plus an ordinary eleven-line conversation that must
+  set nothing off
+- **world** — every sprite a room names exists, no spawn sits in a doorway or inside a
+  collider, every wall has a way through it, and nothing is laid out where a wall will
+  paint over it
+
+`npm run test:browser` runs the game as a production build in real Chromium, and drives
+five tabs at once through the same-browser transport (`?net=local`). It checks every
+character by name — that they arrive as themselves, are offered a full set of emotes, and
+can play every one of them — then the thing that matters most:
+
+> everybody sees everybody else wearing the right face
+
+That assertion exists because the opposite shipped. The Supabase driver decoded every
+arriving peer as one of the two characters that existed when it was written, so three of
+the five looked correct to themselves and wore Colin's face to everyone else. Nothing
+caught it, because every test at the time used the *other* transport, which had its own
+copy of the logic and no bug. Both drivers now share one decoder, and the browser suite
+asserts from all five screens rather than one.
+
+The tests reach into the game through a read-only hook installed behind `?test`
+(`window.__buds`), because asking the canvas what the game believes is not a test, it is
+a guess.
 
 ## The art pipeline
 

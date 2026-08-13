@@ -35,4 +35,10 @@ const walk = (dir) => {
 };
 
 walk(root);
+
+// Node decides CommonJS-or-ESM from the nearest package.json, and the repo's says
+// nothing. Without this every import prints a reparse warning that buries the test
+// output it is mixed into.
+writeFileSync(join(root, "package.json"), '{"type":"module"}\n');
+
 console.log(`esm fixup: patched ${patched} file(s)`);

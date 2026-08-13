@@ -17,3 +17,4 @@ __pycache__/
 # redistribution, so they stay out of the repository. See art-source/README.md for
 # where to put them when you need to re-run the builders.
 art-source/modern-office/
+art-source/modern-interiors/

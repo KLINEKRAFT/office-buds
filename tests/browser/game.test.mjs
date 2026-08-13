@@ -1,0 +1,387 @@
+/**
+ * The whole game, in a real browser, against a real production build.
+ *
+ * The suite is shaped by the two bugs that got out. One: over a real connection every
+ * peer decoded as one of the two characters that existed when the decoder was written,
+ * so three of the five wore somebody else's face - and nothing caught it because every
+ * test used the other transport. Two: three of the five had no emotes at all, which no
+ * test could have caught because no test asked what a character could DO.
+ *
+ * So the rule here is that anything checked for one character is checked for all five,
+ * by name, and anything checked locally is also checked from a peer's screen.
+ */
+import assert from "node:assert/strict";
+
+import {
+  PHONE,
+  buds,
+  check,
+  joinAs,
+  launch,
+  report,
+  say,
+  startServer,
+  stopServer,
+  suite,
+  tap,
+  walk,
+} from "./harness.mjs";
+
+const CAST = [
+  ["COLIN", "colin"],
+  ["MICHAEL", "michael"],
+  ["ALEXIS", "alexis"],
+  ["MELANIE", "melanie"],
+  ["TIFFANY", "tiffany"],
+];
+
+const server = await startServer();
+const browser = await launch();
+
+/**
+ * Everything below runs inside this, so a thrown assertion still shuts the server down.
+ * Without it a crashed run leaves `next start` holding the port, and the NEXT run either
+ * refuses to start or - worse, before the port guard existed - silently tests the build
+ * that crashed.
+ */
+process.on("exit", () => stopServer(server));
+process.on("uncaughtException", (e) => {
+  console.error(e);
+  stopServer(server);
+  process.exit(1);
+});
+
+/** Fresh context per scenario: a shared BroadcastChannel is what makes tabs peers. */
+const scenario = async (fn) => {
+  const ctx = await browser.newContext({ viewport: PHONE });
+  try {
+    return await fn(ctx);
+  } finally {
+    await ctx.close();
+  }
+};
+
+const local = (players) => players.find((p) => p.isLocal);
+const noisyErrors = (page) =>
+  page.errors.filter((e) => !/favicon|ERR_INTERNET_DISCONNECTED/i.test(e));
+
+// ---------------------------------------------------------------------------------
+suite("every character walks in as themselves");
+
+for (const [name, id] of CAST) {
+  const result = await scenario(async (ctx) => {
+    const page = await joinAs(ctx, name);
+    const players = await buds(page, () => window.__buds.players());
+    const emotes = await buds(page, () => window.__buds.emotes());
+    const room = await buds(page, () => window.__buds.room());
+    return { players, emotes, room, errors: noisyErrors(page) };
+  });
+
+  check(`${name} is ${id}`, () => {
+    const me = local(result.players);
+    assert.ok(me, `${name} is not in the player list at all`);
+    assert.equal(me.name, name);
+    assert.equal(me.character, id);
+  });
+
+  check(`${name} starts in the office`, () => {
+    assert.equal(result.room, "office");
+  });
+
+  check(`${name} is offered a full set of emotes`, () => {
+    assert.ok(
+      result.emotes.length >= 6,
+      `${name} only gets ${result.emotes.length}: ${result.emotes.join(", ")}`,
+    );
+  });
+
+  check(`${name} loads with no console errors`, () => {
+    assert.deepEqual(result.errors, []);
+  });
+}
+
+// ---------------------------------------------------------------------------------
+suite("every emote actually plays, for everyone");
+
+for (const [name] of CAST) {
+  const played = await scenario(async (ctx) => {
+    const page = await joinAs(ctx, name);
+    const clips = await buds(page, () => window.__buds.emotes());
+    const out = [];
+    for (const clip of clips) {
+      // Open the tray, tap the emote, read back what the game is playing.
+      await tap(page, '.hud__bottomright .round:has-text("EMOTE")');
+      await tap(page, `.tray .round:has-text("${labelFor(clip)}")`);
+      await page.waitForTimeout(70);
+      const me = local(await buds(page, () => window.__buds.players()));
+      out.push([clip, me.emote]);
+      // A faint holds until you move, so shake it off before the next one.
+      await walk(page, "ArrowUp", 90);
+    }
+    return { out, errors: noisyErrors(page) };
+  });
+
+  check(`${name} can play all of them`, () => {
+    for (const [clip, playing] of played.out) {
+      assert.equal(playing, clip, `tapping ${clip} set emote to "${playing}"`);
+    }
+  });
+
+  check(`${name} emotes without errors`, () => {
+    assert.deepEqual(played.errors, []);
+  });
+}
+
+/** The tray buttons are labelled, not named by clip. Mirrors EMOTES in core/emotes.ts. */
+function labelFor(clip) {
+  return { wave: "WAVE", jump: "JUMP", dance: "DANCE", spin: "SPIN", panic: "PANIC", faint: "FAINT", laptop: "WORK" }[clip] ?? clip.toUpperCase();
+}
+
+// ---------------------------------------------------------------------------------
+suite("five in one office, seen from every screen");
+
+const everyone = await scenario(async (ctx) => {
+  const pages = [];
+  for (const [name] of CAST) pages.push(await joinAs(ctx, name));
+  // Presence needs a heartbeat or two to settle.
+  await pages[0].waitForTimeout(1600);
+  const views = [];
+  for (const page of pages) {
+    views.push({
+      me: local(await buds(page, () => window.__buds.players())),
+      all: await buds(page, () => window.__buds.players()),
+      errors: noisyErrors(page),
+    });
+  }
+  return views;
+});
+
+check("everybody can see everybody", () => {
+  for (const view of everyone) {
+    assert.equal(view.all.length, CAST.length, `${view.me.name} sees ${view.all.length} people`);
+  }
+});
+
+check("everybody sees everybody else wearing the right face", () => {
+  // THE regression. Melanie must look like Melanie on Colin's screen, not like Colin.
+  const expected = new Map(CAST.map(([name, id]) => [name, id]));
+  for (const view of everyone) {
+    for (const p of view.all) {
+      assert.equal(
+        p.character,
+        expected.get(p.name),
+        `on ${view.me.name}'s screen, ${p.name} is drawn as ${p.character}`,
+      );
+    }
+  }
+});
+
+check("no two people are given the same id", () => {
+  for (const view of everyone) {
+    const ids = view.all.map((p) => p.id);
+    assert.equal(new Set(ids).size, ids.length, `${view.me.name} sees duplicate ids`);
+  }
+});
+
+check("everyone is in the same room", () => {
+  for (const view of everyone) {
+    for (const p of view.all) assert.equal(p.room, "office");
+  }
+});
+
+check("a five-way office logs no errors", () => {
+  for (const view of everyone) assert.deepEqual(view.errors, []);
+});
+
+// ---------------------------------------------------------------------------------
+suite("talking");
+
+const talk = await scenario(async (ctx) => {
+  const colin = await joinAs(ctx, "COLIN");
+  const mel = await joinAs(ctx, "MELANIE");
+  await colin.waitForTimeout(900);
+
+  await say(colin, "hello melanie");
+  await colin.waitForTimeout(300);
+  const heard = await mel.textContent(".history").catch(() => null);
+  await tap(mel, '.hud__bottomright .round:has-text("LOG")');
+  const log = await mel.textContent(".history");
+
+  // A phrase everybody can act on, gated to an exact match.
+  await say(colin, "synergy");
+  await colin.waitForTimeout(400);
+  const colinEmote = local(await buds(colin, () => window.__buds.players())).emote;
+  const melEmote = local(await buds(mel, () => window.__buds.players())).emote;
+  const banner = await mel.textContent(".announce").catch(() => "");
+
+  return { log, heard, colinEmote, melEmote, banner, errors: [...noisyErrors(colin), ...noisyErrors(mel)] };
+});
+
+check("what one person says turns up in the other's log", () => {
+  assert.match(talk.log, /hello melanie/i);
+  assert.match(talk.log, /COLIN/);
+});
+
+check("the room-wide reaction reaches everybody, not just the speaker", () => {
+  assert.equal(talk.colinEmote, "faint", "the speaker did not react");
+  assert.equal(talk.melEmote, "faint", "the listener did not react");
+});
+
+check("the banner is shown to the people who did not type it", () => {
+  assert.match(talk.banner, /SOMEBODY SAID IT/i);
+});
+
+check("talking logs no errors", () => {
+  assert.deepEqual(talk.errors, []);
+});
+
+// ---------------------------------------------------------------------------------
+suite("the floor plan");
+
+const plan = await scenario(async (ctx) => {
+  const page = await joinAs(ctx, "COLIN");
+
+  // Walls block. Put Colin above the reception wall away from its doorway, walk down
+  // hard, and he should still be above it.
+  await buds(page, () => window.__buds.place(40, 110));
+  await walk(page, "ArrowDown", 900);
+  const stopped = local(await buds(page, () => window.__buds.players()));
+
+  // Doorways do not. The reception doorway is at x 112..144 on the same wall.
+  await buds(page, () => window.__buds.place(120, 110));
+  await walk(page, "ArrowDown", 1100);
+  const through = local(await buds(page, () => window.__buds.players()));
+
+  // Something to pick up, and putting it back.
+  await buds(page, () => window.__buds.place(48, 196));
+  await page.waitForTimeout(350);
+  const reach = await buds(page, () => window.__buds.reach());
+  let carrying = -1;
+  if (reach) {
+    await tap(page, ".round--act");
+    await page.waitForTimeout(200);
+    carrying = local(await buds(page, () => window.__buds.players())).carrying;
+    await tap(page, ".round--act");
+    await page.waitForTimeout(200);
+  }
+  const dropped = local(await buds(page, () => window.__buds.players())).carrying;
+
+  return { stopped, through, reach, carrying, dropped, errors: noisyErrors(page) };
+});
+
+check("a wall stops you", () => {
+  assert.ok(plan.stopped.y <= 130, `walked through the wall to y=${plan.stopped.y}`);
+});
+
+check("a doorway lets you through", () => {
+  assert.ok(plan.through.y > 150, `did not get through the doorway, stuck at y=${plan.through.y}`);
+});
+
+check("there is something to pick up on a desk", () => {
+  assert.ok(plan.reach, "nothing within reach beside a desk");
+  assert.equal(plan.reach.action, "take");
+});
+
+check("picking up and putting down both work", () => {
+  assert.ok(plan.carrying >= 0, "picked nothing up");
+  assert.equal(plan.dropped, -1, "could not put it down again");
+});
+
+check("walking around logs no errors", () => {
+  assert.deepEqual(plan.errors, []);
+});
+
+// ---------------------------------------------------------------------------------
+suite("going outside, and coming back");
+
+const trip = await scenario(async (ctx) => {
+  const colin = await joinAs(ctx, "COLIN");
+  const tiff = await joinAs(ctx, "TIFFANY");
+  await colin.waitForTimeout(900);
+
+  // The spoken invitation takes the whole room, which is the point of it.
+  await say(colin, "lets go outside");
+  await colin.waitForTimeout(2200);
+  const after = {
+    colin: await buds(colin, () => window.__buds.room()),
+    tiff: await buds(tiff, () => window.__buds.room()),
+  };
+
+  // And back in, this time by walking into the way home.
+  await say(colin, "lets go inside");
+  await colin.waitForTimeout(2200);
+  const home = {
+    colin: await buds(colin, () => window.__buds.room()),
+    tiff: await buds(tiff, () => window.__buds.room()),
+  };
+
+  return { after, home, errors: [...noisyErrors(colin), ...noisyErrors(tiff)] };
+});
+
+check("saying the words takes everyone outside", () => {
+  assert.equal(trip.after.colin, "grove");
+  assert.equal(trip.after.tiff, "grove", "Tiffany was left behind in the office");
+});
+
+check("and brings everyone back", () => {
+  assert.equal(trip.home.colin, "office");
+  assert.equal(trip.home.tiff, "office", "Tiffany was left outside");
+});
+
+check("the round trip logs no errors", () => {
+  assert.deepEqual(trip.errors, []);
+});
+
+// ---------------------------------------------------------------------------------
+suite("the rite, which only Colin can work");
+
+const rite = await scenario(async (ctx) => {
+  const colin = await joinAs(ctx, "COLIN", { extra: "&room=grove" });
+  const mel = await joinAs(ctx, "MELANIE", { extra: "&room=grove" });
+  await colin.waitForTimeout(900);
+
+  // Melanie on the stone: the words must do nothing.
+  await buds(mel, () => window.__buds.place(88, 140));
+  await say(mel, "i summon thee");
+  await mel.waitForTimeout(400);
+  const melTried = await buds(mel, () => window.__buds.summoned());
+
+  // Colin off the stone: also nothing.
+  await buds(colin, () => window.__buds.place(88, 210));
+  await say(colin, "i summon thee");
+  await colin.waitForTimeout(400);
+  const offStone = await buds(colin, () => window.__buds.summoned());
+
+  // Colin on the stone: something answers.
+  await buds(colin, () => window.__buds.place(88, 140));
+  await say(colin, "i summon thee");
+  await colin.waitForTimeout(500);
+  const onStone = await buds(colin, () => window.__buds.summoned());
+  const seenByMel = await buds(mel, () => window.__buds.summoned());
+
+  return { melTried, offStone, onStone, seenByMel, errors: [...noisyErrors(colin), ...noisyErrors(mel)] };
+});
+
+check("Melanie on the stone summons nothing", () => {
+  assert.equal(rite.melTried, false);
+});
+
+check("Colin off the stone summons nothing", () => {
+  assert.equal(rite.offStone, false);
+});
+
+check("Colin on the stone summons something", () => {
+  assert.equal(rite.onStone, true);
+});
+
+check("and everyone else sees it too", () => {
+  assert.equal(rite.seenByMel, true);
+});
+
+check("the rite logs no errors", () => {
+  assert.deepEqual(rite.errors, []);
+});
+
+await browser.close();
+stopServer(server);
+report();

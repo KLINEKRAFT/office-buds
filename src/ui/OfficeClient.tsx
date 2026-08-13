@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ANNOUNCE_MS, CHAT_HISTORY_LIMIT, MAX_MESSAGE_LEN } from "@/game/config";
 import { Game } from "@/game/game";
 import { STATUS_LABEL, type NetStatus } from "@/game/net";
+import type { EmoteDef } from "@/game/core/emotes";
 import type { ChatMessage } from "@/game/types";
 import { inviteUrl } from "@/lib/room";
 import { EntryScreen, type EntryResult } from "./EntryScreen";
@@ -42,6 +43,9 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
   const [draft, setDraft] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Emotes live behind one button: everybody has at least four of them now, and seven
+  // in a row ran off the side of a phone.
+  const [trayOpen, setTrayOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [muted, setMuted] = useState(false);
   const [shared, setShared] = useState(false);
@@ -50,7 +54,7 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
   const [place, setPlace] = useState("");
   const [evictedBy, setEvictedBy] = useState("");
   const [announce, setAnnounce] = useState("");
-  const [emotes, setEmotes] = useState<Array<{ clip: string; label: string; glyph: string }>>([]);
+  const [emotes, setEmotes] = useState<EmoteDef[]>([]);
   const [reach, setReach] = useState<{ action: "take" | "put"; label: string } | null>(null);
   const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reachTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -264,6 +268,25 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
             </div>
           )}
 
+          {!composerOpen && trayOpen && emotes.length > 0 && (
+            <div className="tray">
+              {emotes.map((e) => (
+                <button
+                  key={e.clip}
+                  type="button"
+                  className="round"
+                  onClick={() => {
+                    gameRef.current?.emote(e.clip);
+                    setTrayOpen(false);
+                  }}
+                >
+                  <span className="round__glyph">{e.glyph}</span>
+                  {e.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {!composerOpen && (
             <div className="hud__bottomright">
               <button
@@ -287,21 +310,24 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
                   {reach.label}
                 </button>
               )}
-              {emotes.map((e) => (
+              {emotes.length > 0 && (
                 <button
-                  key={e.clip}
                   type="button"
-                  className="round"
-                  onClick={() => gameRef.current?.emote(e.clip)}
+                  className={`round${trayOpen ? " round--on" : ""}`}
+                  onClick={() => setTrayOpen((v) => !v)}
+                  aria-expanded={trayOpen}
                 >
-                  <span className="round__glyph">{e.glyph}</span>
-                  {e.label}
+                  <span className="round__glyph">{"\u{1F44B}"}</span>
+                  EMOTE
                 </button>
-              ))}
+              )}
               <button
                 type="button"
                 className="round round--chat"
-                onClick={() => setComposerOpen(true)}
+                onClick={() => {
+                  setTrayOpen(false);
+                  setComposerOpen(true);
+                }}
               >
                 <span className="round__glyph">💬</span>
                 CHAT

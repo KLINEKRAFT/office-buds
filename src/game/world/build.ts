@@ -13,6 +13,14 @@ export interface DrawProp {
   sortY: number;
   /** Index in the room's prop list if this one can be picked up, else -1. */
   propIndex: number;
+  /**
+   * A door's four frames. When present the renderer picks between them by how close the
+   * nearest person is, rather than always drawing `rect`.
+   */
+  frames?: SpriteRect[];
+  /** World anchor the door measures that distance from. */
+  anchorX?: number;
+  anchorY?: number;
 }
 
 export interface BuiltRoom {
@@ -52,6 +60,9 @@ function layerRank(p: PropDef): number {
   if (p.layer === "wall") return 1;
   return 2;
 }
+
+/** Height of the lintel left above a doorway, in px, for every wall in the game. */
+const LINTEL = 7;
 
 /**
  * Cheap deterministic hash. Ground tiles pick their variant from this so a field of
@@ -138,7 +149,6 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
     }
     // The cap stays: an opening that runs to the ceiling reads as a missing wall, one
     // with a lintel over it reads as a door.
-    const LINTEL = 7;
     for (const gap of def.wallGaps ?? []) {
       const gx = gap.tx * TILE;
       const gw = gap.tw * TILE;
@@ -154,6 +164,40 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
 
   // ---- props ---------------------------------------------------------------
   const floorProps: DrawProp[] = [];
+
+  // ---- interior walls -------------------------------------------------------
+  // Cut into one segment per tile and pushed in with the props, so they depth sort
+  // against characters instead of being baked flat. See WallRun for why per tile.
+  for (const run of def.walls ?? []) {
+    const wall = get(run.tile ?? def.wallTile ?? "wall");
+    const open = new Set<number>();
+    for (const gap of run.gaps ?? []) {
+      for (let i = 0; i < gap.len; i++) open.add(gap.at + i);
+    }
+    for (let i = 0; i < run.len; i++) {
+      const tx = run.dir === "h" ? run.tx + i : run.tx;
+      const ty = run.dir === "v" ? run.ty + i : run.ty;
+      if (tx < 0 || ty < 0 || tx >= def.widthTiles || ty >= def.heightTiles) continue;
+      // The floor line of the tile the wall stands on: its base, and its sort key.
+      const base = def.wallHeight + (ty + 1) * TILE;
+      const isGap = open.has(i);
+      // A doorway keeps the lintel above it. Without that the opening runs to the
+      // ceiling and reads as a wall somebody forgot to finish rather than a door.
+      const rect = isGap ? { x: wall.x, y: wall.y, w: wall.w, h: LINTEL } : wall;
+      floorProps.push({
+        rect,
+        x: tx * TILE,
+        y: base - wall.h,
+        flip: false,
+        sortY: base,
+        propIndex: -1,
+      });
+      if (!isGap) {
+        colliders.push({ x: tx * TILE, y: def.wallHeight + ty * TILE, w: TILE, h: TILE });
+      }
+    }
+  }
+
   // Keep each prop's index in the room's own list: it is the id a carried item is
   // referred to by over the network, so it has to survive the layer sort below.
   const indexOf = new Map<PropDef, number>();
@@ -161,7 +205,10 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
   const ordered = [...def.props].sort((a, b) => layerRank(a) - layerRank(b));
 
   for (const p of ordered) {
-    const rect = get(p.sprite);
+    // A door is four sprites under one name. Frame 0 is the shut one, and every frame is
+    // cut to the same box so the leaf pivots instead of jumping sideways as it swings.
+    const frames = p.door ? [0, 1, 2, 3].map((i) => get(`${p.sprite}_${i}`)) : undefined;
+    const rect = frames ? frames[0] : get(p.sprite);
     const drawX = Math.round(p.x - rect.w / 2);
     const drawY = Math.round(p.y - rect.h);
 
@@ -175,6 +222,9 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
         flip: p.flip ?? false,
         sortY: p.y + (p.bias ?? 0),
         propIndex: p.takeable ? (indexOf.get(p) ?? -1) : -1,
+        frames,
+        anchorX: p.x,
+        anchorY: p.y,
       });
     }
 

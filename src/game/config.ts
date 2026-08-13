@@ -45,15 +45,11 @@ export const MAX_MESSAGE_LEN = 140;
 export const CHAT_HISTORY_LIMIT = 60;
 
 /**
- * Emotes are one-shot clips, referenced by clip name. Which ones a character actually
- * has depends on the art - Colin has a laptop animation, Michael does not - so the UI
- * reads the list off the atlas manifest rather than hard-coding it.
+ * Doors. They start easing open this far out and are wide open at the near distance,
+ * which means one opens as you walk up to it rather than snapping when you touch it.
  */
-export const EMOTES: Array<{ clip: string; label: string; glyph: string }> = [
-  { clip: "wave", label: "WAVE", glyph: "\u270B" },
-  { clip: "jump", label: "JUMP", glyph: "\u{1F998}" },
-  { clip: "laptop", label: "LAPTOP", glyph: "\u{1F4BB}" },
-];
+export const DOOR_NEAR = 15;
+export const DOOR_FAR = 40;
 
 /** How close your feet have to be to a prop's anchor before you can pick it up. */
 export const REACH_DIST = 26;

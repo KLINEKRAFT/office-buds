@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { castFor, type CastMember } from "@/game/cast";
 import { loadProfile, sanitizeName, saveProfile } from "@/lib/room";
+import { InviteCard } from "./InviteCard";
 
 export type EntryResult = CastMember;
 
@@ -52,10 +53,7 @@ export function EntryScreen({
   return (
     <div className="screen">
       <form className="screen__inner" onSubmit={submit}>
-        <div className="logo">
-          <h1 className="logo__title">OFFICE BUDS</h1>
-          <p className="logo__sub">{roomCode ? `MEETING ${roomCode}` : "A TINY PLACE TO HANG OUT"}</p>
-        </div>
+        <InviteCard roomCode={roomCode} />
 
         <div className="panel">
           <p className="label">First name</p>
