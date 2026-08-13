@@ -439,6 +439,80 @@ check("the rite logs no errors", () => {
   assert.deepEqual(rite.errors, []);
 });
 
+// ---------------------------------------------------------------------------------
+suite("ways michael can die");
+
+const doom = await scenario(async (ctx) => {
+  const colin = await joinAs(ctx, "COLIN");
+  const mike = await joinAs(ctx, "MICHAEL");
+  await colin.waitForTimeout(900);
+
+  // Stand them together - you have to walk up to somebody to do this.
+  await buds(colin, () => window.__buds.place(168, 300));
+  await buds(mike, () => window.__buds.place(180, 300));
+  await colin.waitForTimeout(500);
+
+  const offered = await buds(colin, () => window.__buds.victim());
+  await tap(colin, '.hud__bottomright .round:has-text("END MICHAEL")');
+  await colin.waitForTimeout(150);
+  await tap(colin, '.tray--doom .round:has-text("PRINTER")');
+  await colin.waitForTimeout(600);
+
+  const onMikesScreen = (await buds(mike, () => window.__buds.players())).find((p) => p.isLocal);
+  const seenByColin = (await buds(colin, () => window.__buds.players())).find((p) => !p.isLocal);
+  const banner = await colin.textContent(".announce").catch(() => "");
+
+  // The dead do not walk.
+  const before = onMikesScreen.x;
+  await walk(mike, "ArrowLeft", 700);
+  const after = (await buds(mike, () => window.__buds.players())).find((p) => p.isLocal).x;
+
+  // And getting up is one tap.
+  await tap(mike, '.hud__bottomright .round:has-text("GET UP")');
+  await mike.waitForTimeout(600);
+  const risen = (await buds(colin, () => window.__buds.players())).find((p) => !p.isLocal);
+  await walk(mike, "ArrowLeft", 500);
+  const moved = (await buds(mike, () => window.__buds.players())).find((p) => p.isLocal).x;
+
+  return {
+    offered,
+    onMikesScreen,
+    seenByColin,
+    banner,
+    stuck: before === after,
+    risen,
+    walkedAfter: moved !== before,
+    errors: [...noisyErrors(colin), ...noisyErrors(mike)],
+  };
+});
+
+check("standing next to somebody offers them a way out", () => {
+  assert.equal(doom.offered?.name, "MICHAEL");
+});
+
+check("the victim goes down, on their own screen and everyone else's", () => {
+  assert.ok(doom.onMikesScreen.dead >= 0, "Michael does not think he is dead");
+  assert.ok(doom.seenByColin.dead >= 0, "Colin cannot see that Michael is dead");
+  assert.equal(doom.onMikesScreen.dead, doom.seenByColin.dead, "they disagree about the cause");
+});
+
+check("everyone gets the headline", () => {
+  assert.match(doom.banner, /MICHAEL WAS EATEN BY THE PRINTER/i);
+});
+
+check("the dead do not walk", () => {
+  assert.ok(doom.stuck, "walked away while dead");
+});
+
+check("getting up works, and is visible to everyone", () => {
+  assert.equal(doom.risen.dead, -1, "Colin still sees a body");
+  assert.ok(doom.walkedAfter, "could not move again after getting up");
+});
+
+check("dying logs no errors", () => {
+  assert.deepEqual(doom.errors, []);
+});
+
 await browser.close();
 stopServer(server);
 report();

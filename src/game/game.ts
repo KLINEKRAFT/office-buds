@@ -7,6 +7,7 @@ import {
   MAX_MESSAGE_LEN,
   NET_IDLE_RESEND_MS,
   PEER_TIMEOUT_MS,
+  DOOM_REACH,
   REACH_DIST,
   REMOTE_SMOOTHING,
   REMOTE_SNAP_DIST,
@@ -28,6 +29,7 @@ import { buildRoom, type BuiltRoom } from "./world/build";
 import { bodyRect, findFreeSpawn, moveWithCollision } from "./world/collision";
 import { DEFAULT_ROOM, getRoom, matchSayTrigger } from "./world";
 import { matchChatMagic } from "./chatMagic";
+import { DOOMS, anyDoom, doomEffect, headline, parseDoom, parseRevive, reviveEffect } from "./doom";
 import { BURST_SECONDS, isBurst, isMood, type Burst, type Mood } from "./effects";
 
 export interface GameOptions {
@@ -48,6 +50,13 @@ export interface GameOptions {
   onAnnounce(text: string): void;
   /** Somebody cleared the room. The shell should leave the office entirely. */
   onEvicted(byName: string): void;
+}
+
+/** Cheap deterministic hash, so "kill michael" picks the same end for everyone. */
+function hash(text: string): number {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (Math.imul(h, 31) + text.charCodeAt(i)) | 0;
+  return h;
 }
 
 function uid(): string {
@@ -143,6 +152,7 @@ export class Game {
       room: room.def.id,
       carrying: -1,
       ascended: false,
+      dead: -1,
       animTime: 0,
       emoteTime: 0,
       bubble: null,
@@ -204,6 +214,7 @@ export class Game {
             emote: p.emote,
             carrying: p.carrying,
             ascended: p.ascended,
+            dead: p.dead,
             room: p.room,
             isLocal: p.id === this.local.id,
           })),
@@ -213,6 +224,8 @@ export class Game {
         reach: () => this.reach,
         here: () => this.here,
         zoomedOut: () => this.zoomedOut,
+        victim: () => this.victim,
+        isDead: () => this.isDead,
         place: (x: number, y: number) => {
           this.local.x = this.local.renderX = x;
           this.local.y = this.local.renderY = y;
@@ -244,6 +257,7 @@ export class Game {
           room: this.local.room,
           carrying: -1,
           ascended: false,
+          dead: -1,
           animTime: 0,
           emoteTime: 0,
           bubble: null,
@@ -267,6 +281,7 @@ export class Game {
         p.room = state.room;
         p.carrying = state.carrying;
         p.ascended = state.ascended;
+        p.dead = state.dead;
         p.lastSeen = Date.now();
         if (state.emote && state.emote !== p.emote) {
           p.emote = state.emote;
@@ -365,6 +380,37 @@ export class Game {
       // if nobody said the opening words, and calling them back brings the day up again.
       this.mood = rising ? "normal" : "ritual";
       this.audio.join();
+      return;
+    }
+    // Somebody was killed. Only the victim's own client acts on it, because a player's
+    // state is theirs to send - from there the `dead` field rides the ordinary heartbeat
+    // and everyone agrees without anything else being broadcast. The headline is derived
+    // from the same number, so the words and the body can never disagree.
+    const doom = parseDoom(effect);
+    if (doom) {
+      const victim = this.players.get(doom.id);
+      if (victim && victim.room === this.local.room) {
+        this.opts.onAnnounce(headline(victim.name, doom.cause));
+        if (victim.id === this.local.id) {
+          this.local.dead = doom.cause;
+          this.local.emote = "";
+          this.local.carrying = -1;
+          this.lastSent = null;
+        }
+        this.audio.leave();
+      }
+      return;
+    }
+    const revived = parseRevive(effect);
+    if (revived) {
+      const victim = this.players.get(revived);
+      if (victim && victim.room === this.local.room) {
+        if (victim.id === this.local.id) {
+          this.local.dead = -1;
+          this.lastSent = null;
+        }
+        this.audio.join();
+      }
       return;
     }
     // "emote:dance" - everyone in the room plays it. Each client applies it to its OWN
@@ -474,6 +520,9 @@ export class Game {
     p.emote = "";
     p.carrying = -1;
     p.ascended = false;
+    // Whatever happened to you happened in the other room. Carrying a death through a
+    // doorway would leave you face down in the grove with nobody who saw it.
+    p.dead = -1;
     this.summoned = false;
     // Lighting belongs to the room you left, not to you. Without this, walking out of a
     // party leaves the village lit by disco lamps that nobody outside switched on.
@@ -584,7 +633,7 @@ export class Game {
     const p = this.local;
     // Whatever the ceremony took does not walk around. Being unable to move is most of
     // what makes it land; the leader saying "rise" is what gives you your legs back.
-    const v = p.ascended ? { x: 0, y: 0 } : this.input.vector();
+    const v = p.ascended || p.dead >= 0 ? { x: 0, y: 0 } : this.input.vector();
     const mag = Math.hypot(v.x, v.y);
     this.localSpeed = mag * WALK_SPEED;
 
@@ -713,6 +762,7 @@ export class Game {
       room: p.room,
       carrying: p.carrying,
       ascended: p.ascended,
+      dead: p.dead,
     };
     const prev = this.lastSent;
     const now = performance.now();
@@ -724,6 +774,7 @@ export class Game {
       prev.room !== state.room ||
       prev.carrying !== state.carrying ||
       prev.ascended !== state.ascended ||
+      prev.dead !== state.dead ||
       Math.abs(prev.x - state.x) > 0.4 ||
       Math.abs(prev.y - state.y) > 0.4;
 
@@ -772,6 +823,14 @@ export class Game {
       if (magic.effect) this.fireEffect(magic.effect, this.local.name);
     }
 
+    // "kill michael", and "revive michael" to take it back. Parsed here rather than in
+    // the phrase table because it takes a name, and the table is fixed strings.
+    const aimed = this.aim(text);
+    if (aimed) {
+      if (aimed.revive) this.fireEffect(reviveEffect(aimed.target.id), this.local.name);
+      else this.doom(aimed.target.id, anyDoom(hash(text + aimed.target.id)));
+    }
+
     // Saying the magic words takes the whole room with you.
     const trigger = matchSayTrigger(this.room.def, text);
     if (trigger) {
@@ -781,6 +840,31 @@ export class Game {
       // Let the bubble land before the screen goes dark.
       window.setTimeout(() => this.beginTransition(trigger.to, trigger.spawn ?? 0), 650);
     }
+  }
+
+  /**
+   * Reads "kill michael" or "revive mike" and finds who is meant, or null.
+   *
+   * Deliberately narrow: the verb has to start the message, so "I could kill for a
+   * coffee" does not put anybody on the floor. Matching is on the name people actually
+   * type rather than on the cast list, so it works for a guest called anything.
+   */
+  private aim(text: string): { target: Player; revive: boolean } | null {
+    const said = text.trim().toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ");
+    const kill = /^(kill|smite|end|murder)\s+(.+)$/.exec(said);
+    const back = /^(revive|resurrect|heal|raise)\s+(.+)$/.exec(said);
+    const hit = kill ?? back;
+    if (!hit) return null;
+    const who = hit[2].trim();
+    for (const p of this.players.values()) {
+      if (p.room !== this.local.room) continue;
+      if (p.name.toLowerCase() !== who) continue;
+      // Reviving somebody already up, or killing somebody already down, is a no-op
+      // rather than a second headline.
+      if (Boolean(back) === p.dead >= 0) return { target: p, revive: Boolean(back) };
+      return null;
+    }
+    return null;
   }
 
   /**
@@ -865,6 +949,46 @@ export class Game {
     const body = bodyRect(this.local.x, this.local.y);
     const zone = (this.room.def.zones ?? []).find((z) => overlaps(body, z.rect));
     return zone?.label ?? null;
+  }
+
+  /**
+   * Who is close enough to kill, and the list of ways. Nearest person in the room, the
+   * same reach a pick-up uses - you walk up to somebody to do this, which is both funnier
+   * and stops it being something you fire across the building at nobody in particular.
+   */
+  get victim(): { id: string; name: string } | null {
+    if (this.local.dead >= 0) return null;
+    let best: Player | null = null;
+    let bestDist = DOOM_REACH;
+    for (const p of this.players.values()) {
+      if (p.id === this.local.id || p.room !== this.local.room || p.dead >= 0) continue;
+      const d = Math.hypot(p.x - this.local.x, p.y - this.local.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = p;
+      }
+    }
+    return best ? { id: best.id, name: best.name } : null;
+  }
+
+  /** The ways to go, for the tray. */
+  get dooms(): Array<{ index: number; short: string }> {
+    return DOOMS.map((d, index) => ({ index, short: d.short }));
+  }
+
+  doom(victimId: string, cause: number): void {
+    if (!DOOMS[cause]) return;
+    this.fireEffect(doomEffect(victimId, cause), this.local.name);
+  }
+
+  /** True while the local player is on the floor, so the HUD can offer GET UP. */
+  get isDead(): boolean {
+    return this.local.dead >= 0;
+  }
+
+  getUp(): void {
+    if (this.local.dead < 0) return;
+    this.fireEffect(reviveEffect(this.local.id), this.local.name);
   }
 
   /** Pulls the camera back until the whole floor fits, and back again. */

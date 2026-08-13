@@ -1,5 +1,5 @@
 import type { CharacterId, PlayerState } from "../types";
-import { decodeIdentity } from "./identity";
+import { decodeIdentity, decodeMove } from "./identity";
 import type { Net, NetHandlers } from "./types";
 
 type Msg =
@@ -82,19 +82,12 @@ export class LocalNet implements Net {
       case "bye":
         if (this.known.delete(msg.id)) this.handlers?.onLeave(msg.id);
         break;
-      case "m":
+      case "m": {
         if (!this.known.has(msg.id)) return;
-        this.handlers?.onMove(msg.id, {
-          x: msg.x,
-          y: msg.y,
-          dir: msg.dir,
-          moving: msg.moving,
-          emote: msg.emote,
-          room: msg.room,
-          carrying: typeof msg.carrying === "number" ? msg.carrying : -1,
-          ascended: !!msg.ascended,
-        });
+        const state = decodeMove(msg as unknown as Record<string, unknown>);
+        if (state) this.handlers?.onMove(msg.id, state);
         break;
+      }
       case "c":
         if (!this.known.has(msg.id)) return;
         this.handlers?.onChat(msg.id, msg.text, msg.at);

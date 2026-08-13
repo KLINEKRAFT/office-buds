@@ -51,6 +51,9 @@ export const CHAT_HISTORY_LIMIT = 60;
 export const DOOR_NEAR = 15;
 export const DOOR_FAR = 40;
 
+/** How close you have to stand to somebody to be offered a way to end them. */
+export const DOOM_REACH = 44;
+
 /** How close your feet have to be to a prop's anchor before you can pick it up. */
 export const REACH_DIST = 26;
 /** How far above a carrier's feet a held item is drawn, arms overhead. */

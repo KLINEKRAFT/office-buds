@@ -530,6 +530,25 @@ button {
   background: var(--accent);
 }
 
+/* Ways to go. Wider and text-only: sixteen of them need to be readable at a glance, and
+   a glyph per cause of death would be sixteen pictograms nobody can tell apart. */
+.round--doom {
+  background: var(--slate-dark);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  padding: 0 3px;
+}
+
+.tray--doom {
+  max-width: min(300px, 82vw);
+}
+
+.tray--doom .round {
+  width: 68px;
+  height: 34px;
+}
+
 /* ---- chat ---------------------------------------------------------------- */
 
 .composer {
