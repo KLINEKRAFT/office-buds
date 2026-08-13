@@ -201,6 +201,30 @@ def rug_set() -> dict[str, Image.Image]:
     return out
 
 
+def side_wall(band: Image.Image) -> Image.Image:
+    """
+    A wall running north-south, seen from above.
+
+    You look ALONG a side wall in this projection rather than at it, so what you see is
+    the top of it - which the wallpaper band already contains, as the cornice across its
+    first few rows. This lifts those colours into a 16x16 tile that repeats vertically
+    without a seam.
+
+    The first attempt reused a 16px slice of the wallpaper body instead, and the body is
+    a brick texture with a horizontal highlight in it: repeated every 16px down a long
+    wall, that came out as a ladder. A tile has to be uniform along the axis it repeats
+    on, and this one is.
+    """
+    px = band.load()
+    edge = px[8, 0][:3]  # the dark outline above the cornice
+    top = px[8, 2][:3]  # the cornice itself
+    out = Image.new("RGBA", (TILE, TILE), (*top, 255))
+    d = ImageDraw.Draw(out)
+    d.rectangle([0, 0, 0, TILE - 1], fill=(*edge, 255))
+    d.rectangle([TILE - 1, 0, TILE - 1, TILE - 1], fill=(*edge, 255))
+    return out
+
+
 def trim(im: Image.Image) -> Image.Image:
     a = np.array(im)[:, :, 3]
     ys, xs = np.where(a > 8)
@@ -304,7 +328,9 @@ def main() -> None:
     # Column 1 rather than column 0: the first column of a wallpaper block carries the
     # block's own left end cap, which would repeat as a seam every 16px.
     for name, y in WALLS.items():
-        sprites[name] = rb.crop((TILE, y, TILE * 2, y + 32))
+        band = rb.crop((TILE, y, TILE * 2, y + 32))
+        sprites[name] = band
+        sprites[f"{name}_side"] = side_wall(band)
     for name, (cx, cy) in FLOORS.items():
         sprites[name] = rb.crop((cx * TILE, cy * TILE, cx * TILE + TILE, cy * TILE + TILE))
 
