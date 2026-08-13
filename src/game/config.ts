@@ -51,6 +51,13 @@ export const CHAT_HISTORY_LIMIT = 60;
 export const DOOR_NEAR = 15;
 export const DOOR_FAR = 40;
 
+/** How long after getting up you can reach whoever put you down, from anywhere. */
+export const REVENGE_MS = 15000;
+/** How many deaths the corner of the screen remembers. */
+export const FEED_LIMIT = 5;
+/** How long a line stays in the feed. */
+export const FEED_MS = 14000;
+
 /** How close you have to stand to somebody to be offered a way to end them. */
 export const DOOM_REACH = 44;
 

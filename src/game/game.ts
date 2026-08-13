@@ -8,7 +8,9 @@ import {
   NET_IDLE_RESEND_MS,
   PEER_TIMEOUT_MS,
   DOOM_REACH,
+  FEED_LIMIT,
   REACH_DIST,
+  REVENGE_MS,
   REMOTE_SMOOTHING,
   REMOTE_SNAP_DIST,
   TARGET_VIEW_H,
@@ -128,6 +130,19 @@ export class Game {
   /** ?test (or ?debug) installs the read-only introspection hook used by the tests. */
   private testSeam = false;
 
+  /**
+   * What has happened to people, kept locally.
+   *
+   * Every client sees every death broadcast in its room, so each keeps its own tally and
+   * they agree without anything extra on the wire. Somebody who joins late starts with an
+   * empty feed rather than being caught up - a scoreboard for the session you were in is
+   * the honest thing to show, and replaying an hour of deaths at a newcomer is not.
+   */
+  private feed: Array<{ id: string; text: string; at: number }> = [];
+  private tally = new Map<string, { kills: number; deaths: number }>();
+  /** Who put us down, and until when getting up buys a free swing at them. */
+  private grudge: { id: string; until: number } | null = null;
+
   private constructor(
     private readonly opts: GameOptions,
     private readonly assets: Assets,
@@ -226,6 +241,8 @@ export class Game {
         zoomedOut: () => this.zoomedOut,
         victim: () => this.victim,
         isDead: () => this.isDead,
+        deaths: () => this.deaths,
+        scores: () => this.scores,
         place: (x: number, y: number) => {
           this.local.x = this.local.renderX = x;
           this.local.y = this.local.renderY = y;
@@ -390,12 +407,20 @@ export class Game {
     if (doom) {
       const victim = this.players.get(doom.id);
       if (victim && victim.room === this.local.room) {
-        this.opts.onAnnounce(headline(victim.name, doom.cause));
+        const line = headline(victim.name, doom.cause, doom.weapon);
+        this.opts.onAnnounce(line);
+        this.remember(line, byName, victim.name);
         if (victim.id === this.local.id) {
           this.local.dead = doom.cause;
           this.local.emote = "";
           this.local.carrying = -1;
           this.lastSent = null;
+          // Who did it, so getting up promptly buys one swing back.
+          const killer = [...this.players.values()].find((p) => p.name === byName);
+          this.grudge =
+            killer && killer.id !== this.local.id
+              ? { id: killer.id, until: Date.now() + REVENGE_MS }
+              : null;
         }
         this.audio.leave();
       }
@@ -951,13 +976,45 @@ export class Game {
     return zone?.label ?? null;
   }
 
+  /** Records a death in the feed and the tally. */
+  private remember(line: string, killer: string, victimName: string): void {
+    this.feed.push({ id: uid(), text: line, at: Date.now() });
+    if (this.feed.length > FEED_LIMIT) this.feed.shift();
+    const forKiller = this.tally.get(killer) ?? { kills: 0, deaths: 0 };
+    forKiller.kills++;
+    this.tally.set(killer, forKiller);
+    const forVictim = this.tally.get(victimName) ?? { kills: 0, deaths: 0 };
+    forVictim.deaths++;
+    this.tally.set(victimName, forVictim);
+  }
+
+  /** The last few deaths, newest last, for the corner of the screen. */
+  get deaths(): Array<{ id: string; text: string; at: number }> {
+    return this.feed;
+  }
+
+  /** Who has done what to whom this session, worst first. */
+  get scores(): Array<{ name: string; kills: number; deaths: number }> {
+    return [...this.tally.entries()]
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.kills - a.kills || b.deaths - a.deaths || a.name.localeCompare(b.name));
+  }
+
   /**
    * Who is close enough to kill, and the list of ways. Nearest person in the room, the
    * same reach a pick-up uses - you walk up to somebody to do this, which is both funnier
    * and stops it being something you fire across the building at nobody in particular.
    */
-  get victim(): { id: string; name: string } | null {
+  get victim(): { id: string; name: string; revenge?: boolean } | null {
     if (this.local.dead >= 0) return null;
+    // Just got up? Whoever put you down is in range from anywhere, briefly. One joke
+    // becomes a feud, which is the better version of it.
+    if (this.grudge && Date.now() < this.grudge.until) {
+      const killer = this.players.get(this.grudge.id);
+      if (killer && killer.room === this.local.room && killer.dead < 0) {
+        return { id: killer.id, name: killer.name, revenge: true };
+      }
+    }
     let best: Player | null = null;
     let bestDist = DOOM_REACH;
     for (const p of this.players.values()) {
@@ -978,7 +1035,14 @@ export class Game {
 
   doom(victimId: string, cause: number): void {
     if (!DOOMS[cause]) return;
-    this.fireEffect(doomEffect(victimId, cause), this.local.name);
+    // Whatever you are holding is what you did it with. Derived from `carrying`, which
+    // already replicates, so everyone watching saw you walk over with the photocopier
+    // and the headline agrees with them.
+    const held = this.local.carrying >= 0
+      ? this.room.def.props[this.local.carrying]?.sprite ?? ""
+      : "";
+    this.grudge = null;
+    this.fireEffect(doomEffect(victimId, cause, held), this.local.name);
   }
 
   /** True while the local player is on the floor, so the HUD can offer GET UP. */

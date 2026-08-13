@@ -222,6 +222,18 @@ rides the ordinary movement heartbeat, so every screen agrees about who is on th
 with nothing replayed, and somebody who walks in ten minutes later finds the bodies. The
 headline is derived from the same number, so the words and the sprite cannot disagree.
 
+The last few deaths stack in the corner of the screen and the tally lives in settings —
+both derived locally from the broadcasts each client sees, so they agree without anything
+extra on the wire. Somebody who joins late starts with an empty feed rather than being
+caught up, which is the honest thing to show.
+
+Two touches that fall out of state the game already replicates. **Whatever you are holding
+is what you did it with**, so walking over with the photocopier gets you
+`MICHAEL WAS BEATEN TO DEATH WITH THE COPIER` instead of the cause you picked — everyone
+watching saw you carrying it, and the other headline would be describing a different
+event. And **getting up promptly buys one swing back**: for fifteen seconds, whoever put
+you down is in range from anywhere on the floor, which turns one joke into a feud.
+
 `src/game/doom.ts` is the list, one line each. The index is what crosses the wire, so
 adding to the end is free and reordering will have somebody dying of the wrong thing on a
 client that has not reloaded. Add, do not rearrange.

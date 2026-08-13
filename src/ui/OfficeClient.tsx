@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ANNOUNCE_MS, CHAT_HISTORY_LIMIT, MAX_MESSAGE_LEN } from "@/game/config";
+import { ANNOUNCE_MS, CHAT_HISTORY_LIMIT, FEED_MS, MAX_MESSAGE_LEN } from "@/game/config";
 import { Game } from "@/game/game";
 import { STATUS_LABEL, type NetStatus } from "@/game/net";
 import type { EmoteDef } from "@/game/core/emotes";
@@ -61,7 +61,11 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
   const [here, setHere] = useState<string | null>(null);
   const [zoomedOut, setZoomedOut] = useState(false);
   // Who is close enough to end, and whether it is us on the floor.
-  const [victim, setVictim] = useState<{ id: string; name: string } | null>(null);
+  const [victim, setVictim] = useState<{ id: string; name: string; revenge?: boolean } | null>(
+    null,
+  );
+  const [feed, setFeed] = useState<Array<{ id: string; text: string; at: number }>>([]);
+  const [scores, setScores] = useState<Array<{ name: string; kills: number; deaths: number }>>([]);
   const [dead, setDead] = useState(false);
   const [doomOpen, setDoomOpen] = useState(false);
   const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -133,8 +137,19 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
           const room = gameRef.current?.here ?? null;
           setHere((prev) => (prev === room ? prev : room));
           const near = gameRef.current?.victim ?? null;
-          setVictim((prev) => (prev?.id === near?.id ? prev : near));
+          setVictim((prev) =>
+            prev?.id === near?.id && prev?.revenge === near?.revenge ? prev : near,
+          );
           setDead(gameRef.current?.isDead ?? false);
+          // Only the lines still worth showing, so the corner empties itself.
+          const recent = (gameRef.current?.deaths ?? []).filter(
+            (d) => Date.now() - d.at < FEED_MS,
+          );
+          setFeed((prev) =>
+            prev.length === recent.length && prev[prev.length - 1]?.id === recent[recent.length - 1]?.id
+              ? prev
+              : recent,
+          );
         }, 250);
       } catch (e) {
         if (cancelled) return;
@@ -265,7 +280,10 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
             <button
               type="button"
               className="chip chip--button"
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => {
+              setScores(gameRef.current?.scores ?? []);
+              setSettingsOpen(true);
+            }}
               aria-label="Settings"
             >
               ⚙
@@ -273,6 +291,16 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
           </div>
 
           {announce && <div className="announce">{announce}</div>}
+
+          {feed.length > 0 && (
+            <div className="feed">
+              {feed.map((d) => (
+                <span key={d.id} className="feed__line">
+                  {d.text}
+                </span>
+              ))}
+            </div>
+          )}
 
           {historyOpen && (
             <div className="history">
@@ -381,8 +409,8 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
                   }}
                   aria-expanded={doomOpen}
                 >
-                  <span className="round__glyph">{"\u{1F480}"}</span>
-                  END {victim.name}
+                  <span className="round__glyph">{victim.revenge ? "\u2694" : "\u{1F480}"}</span>
+                  {victim.revenge ? "REVENGE" : `END ${victim.name}`}
                 </button>
               )}
               {emotes.length > 0 && (
@@ -478,6 +506,21 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
                   on this device. Set NEXT_PUBLIC_SUPABASE_URL and
                   NEXT_PUBLIC_SUPABASE_ANON_KEY to make invite links work.
                 </p>
+              )}
+
+              {scores.length > 0 && (
+                <>
+                  <p className="label">Since you got here</p>
+                  <div className="scores">
+                    {scores.map((row) => (
+                      <div key={row.name} className="scores__row">
+                        <span className="scores__name">{row.name}</span>
+                        <span>{row.kills} ended</span>
+                        <span>{row.deaths} died</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
 
               <p className="label">Sound</p>
