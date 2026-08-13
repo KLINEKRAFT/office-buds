@@ -81,10 +81,13 @@ export const grove: RoomDef = {
   ],
 
   spawns: [
-    // Index 0: arriving from the office. Deliberately clear of the exit rect below the
-    // cottage door - landing inside it meant arriving, waiting out the exit cooldown and
-    // then being walked straight back indoors without touching anything.
-    { x: 84, y: 104 },
+    // Index 0: arriving from the office. Two things to stay clear of, both learned the
+    // hard way. The exit rect below the cottage door - landing in it meant arriving,
+    // waiting out the exit cooldown and being walked straight back indoors. And the
+    // altar stone, which this used to land squarely inside: findFreeSpawn shuffled you
+    // out of it, but a step in any direction from where you were put was still inside
+    // the boulder, so you arrived outdoors and could not move.
+    { x: 56, y: 122 },
     { x: 58, y: 112 },
     { x: 114, y: 112 },
   ],

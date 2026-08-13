@@ -13,13 +13,18 @@ import { readFileSync } from "node:fs";
 import { check, report, suite } from "./harness.mjs";
 import { office } from "../.testbuild/world/office.js";
 import { grove } from "../.testbuild/world/grove.js";
+import { roomColliders } from "../.testbuild/world/build.js";
 
 const load = (name) =>
   JSON.parse(readFileSync(new URL(`../public/assets/${name}`, import.meta.url)));
 
+const SPRITES = {
+  office: load("props.json").sprites,
+  village: load("village.json").sprites,
+};
 const ATLASES = {
-  office: new Set(Object.keys(load("props.json").sprites)),
-  village: new Set(Object.keys(load("village.json").sprites)),
+  office: new Set(Object.keys(SPRITES.office)),
+  village: new Set(Object.keys(SPRITES.village)),
 };
 
 const ROOMS = [office, grove];
@@ -136,6 +141,8 @@ for (const room of ROOMS) {
 suite("office walls and doorways");
 
 const wallBase = (ty) => office.wallHeight + (ty + 1) * TILE;
+/** The office's real collision, auto footprints and all. */
+const OFFICE_COLLIDERS = roomColliders(office, (name) => SPRITES.office[name]);
 const row = (ty) => office.wallHeight + ty * TILE;
 
 /** Every wall tile, expanded from the runs, with the gaps marked. */
@@ -222,12 +229,20 @@ check("nothing stands in a doorway", () => {
         ? { x: x0, y: y0 - APPROACH, w: gap.len * TILE, h: TILE + APPROACH * 2 }
         : { x: x0 - APPROACH, y: y0, w: TILE + APPROACH * 2, h: gap.len * TILE };
 
-      for (const p of office.props) {
-        if (p.door) continue;
-        if (p.solid && p.collider && overlaps(p.collider, opening)) {
-          assert.fail(`${p.sprite} blocks the doorway at ${run.dir} ${run.tx},${run.ty}+${gap.at}`);
+      // Against the colliders the GAME uses, not against `p.collider` - most props do
+      // not declare one and get an automatic footprint instead, and reading the field
+      // silently skipped every one of them. A printer blocking a doorway got through
+      // exactly that hole.
+      for (const c of OFFICE_COLLIDERS) {
+        if (overlaps(c, opening)) {
+          assert.fail(
+            `something at ${JSON.stringify(c)} blocks the doorway at ` +
+              `${run.dir} ${run.tx},${run.ty}+${gap.at}`,
+          );
         }
-        // Takeables have no collider, so check the anchor itself.
+      }
+      for (const p of office.props) {
+        // Takeables never block, but a PICK UP prompt fighting a door is its own misery.
         if (p.takeable && overlaps(body(p.x, p.y), opening)) {
           assert.fail(`${p.sprite} sits in the doorway at ${run.dir} ${run.tx},${run.ty}+${gap.at}`);
         }
@@ -238,12 +253,16 @@ check("nothing stands in a doorway", () => {
 
 check("nothing stands in front of the lift", () => {
   for (const exit of office.exits ?? []) {
-    const approach = { x: exit.rect.x - 8, y: exit.rect.y - 8, w: exit.rect.w + 16, h: exit.rect.h + 24 };
-    for (const p of office.props) {
-      if (p.door) continue;
-      if (p.solid && p.collider && overlaps(p.collider, approach)) {
-        assert.fail(`${p.sprite} blocks the way to ${exit.to}`);
-      }
+    const approach = {
+      // Downward from the exit only: you walk UP to a lift, and the wall its doors are
+      // set into is necessarily right behind it.
+      x: exit.rect.x - 8,
+      y: exit.rect.y,
+      w: exit.rect.w + 16,
+      h: exit.rect.h + 26,
+    };
+    for (const c of OFFICE_COLLIDERS) {
+      assert.ok(!overlaps(c, approach), `something at ${JSON.stringify(c)} blocks the lift`);
     }
   }
 });
@@ -276,6 +295,91 @@ check("the seats put people where the furniture can cover their legs", () => {
       (p) => p.solid && Math.abs(p.x - seat.x) < 20 && p.y > seat.y && p.y - seat.y < 12,
     );
     assert.ok(front, `seat "${seat.id}" has no furniture in front of it to sit behind`);
+  }
+});
+
+suite("can you actually get anywhere");
+
+/**
+ * Flood fill a room from where you arrive in it, using exactly the collision the game
+ * uses, and see what you can reach.
+ *
+ * This is the test for "I am trying to move my guy around and he is stuck". Eyeballing a
+ * floor plan tells you it looks right; it cannot tell you that a desk 4px too far left
+ * has sealed the print room off, or that the spawn itself is inside a wall. A flood fill
+ * can, and it checks all of it at once.
+ */
+function reachable(room, start) {
+  const colliders = roomColliders(room, (name) => SPRITES[room.atlas][name]);
+  const width = room.widthTiles * TILE;
+  const height = room.wallHeight + room.heightTiles * TILE;
+  const STEP = 4; // finer than a character is wide, so it cannot squeeze through a wall
+  const blocked = (x, y) => {
+    if (x < 6 || x > width - 6 || y < room.wallHeight + 1 || y > height - 2) return true;
+    const b = body(x, y);
+    return colliders.some((c) => overlaps(b, c));
+  };
+  const key = (x, y) => `${x},${y}`;
+  const snap = (v) => Math.round(v / STEP) * STEP;
+  const from = { x: snap(start.x), y: snap(start.y) };
+  const seen = new Set([key(from.x, from.y)]);
+  const queue = [from];
+  while (queue.length) {
+    const at = queue.shift();
+    for (const [dx, dy] of [[STEP, 0], [-STEP, 0], [0, STEP], [0, -STEP]]) {
+      const nx = at.x + dx;
+      const ny = at.y + dy;
+      if (seen.has(key(nx, ny)) || blocked(nx, ny)) continue;
+      seen.add(key(nx, ny));
+      queue.push({ x: nx, y: ny });
+    }
+  }
+  return { seen, blocked, snap, STEP };
+}
+
+for (const room of ROOMS) {
+  const spawn = room.spawns[0];
+
+  check(`${room.id}: you can move at all from where you arrive`, () => {
+    const { seen } = reachable(room, spawn);
+    assert.ok(seen.size > 20, `only ${seen.size} spots reachable - you are stuck on arrival`);
+  });
+
+  check(`${room.id}: every arrival point and seat is somewhere you can stand`, () => {
+    const { blocked } = reachable(room, spawn);
+    for (const [i, s] of room.spawns.entries()) {
+      assert.ok(!blocked(s.x, s.y), `spawn ${i} at (${s.x}, ${s.y}) is inside something`);
+    }
+    for (const seat of room.seats ?? []) {
+      assert.ok(!blocked(seat.x, seat.y), `seat "${seat.id}" is inside something`);
+    }
+  });
+}
+
+check("every room in the office can be walked to from the lift", () => {
+  const { seen, snap, STEP } = reachable(office, office.spawns[0]);
+  for (const zone of office.zones ?? []) {
+    // Sample the zone rather than trusting its centre, which can land on a desk.
+    let found = false;
+    for (let y = zone.rect.y + 8; y < zone.rect.y + zone.rect.h - 4 && !found; y += STEP) {
+      for (let x = zone.rect.x + 8; x < zone.rect.x + zone.rect.w - 4; x += STEP) {
+        if (seen.has(`${snap(x)},${snap(y)}`)) {
+          found = true;
+          break;
+        }
+      }
+    }
+    assert.ok(found, `"${zone.label}" cannot be reached from the lift`);
+  }
+});
+
+check("the seat is reachable, not just standable", () => {
+  const { seen, snap } = reachable(office, office.spawns[0]);
+  for (const seat of office.seats ?? []) {
+    assert.ok(
+      seen.has(`${snap(seat.x)},${snap(seat.y)}`),
+      `seat "${seat.id}" cannot be walked to`,
+    );
   }
 });
 

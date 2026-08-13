@@ -44,7 +44,7 @@ export interface BuiltRoom {
  * little. Front-elevation furniture and trees are drawn far taller than the ground they
  * occupy, so using the whole sprite would feel like walking into invisible walls.
  */
-function autoCollider(def: PropDef, rect: SpriteRect): Rect {
+function autoCollider(def: PropDef, rect: { w: number; h: number }): Rect {
   const depth = Math.max(5, Math.round(rect.h * 0.4));
   const inset = rect.w > 14 ? 2 : 1;
   return {
@@ -68,15 +68,16 @@ const LINTEL = 7;
 const DOOR_FRAMES = [0, 1, 2];
 
 /**
- * Where the repeating part of a wallpaper band starts, below its cornice.
+ * Suffix of the sprite a north-south wall is drawn from.
  *
- * A wall running north-south is seen from above in this projection - you look along it,
- * not at it - so it is drawn as a 16px strip of that repeating body rather than as the
- * full 32px face. Drawing the face was the obvious thing and was wrong: each tile
- * repeated the cornice 16px below the last one, and a side wall came out as a ladder of
- * white stripes.
+ * You look ALONG a side wall in this projection rather than at it, so it is one 16px
+ * tile of the top of the wall rather than the 32px face. Two wrong versions got here:
+ * the face itself, which repeated its cornice every 16px and came out as a ladder of
+ * white stripes; and a slice of the wallpaper body, which is a brick texture with a
+ * horizontal highlight in it and laddered for the same reason. A tile has to be uniform
+ * along the axis it repeats on. See side_wall() in tools/build_office.py.
  */
-const WALL_BODY_TOP = 6;
+const SIDE = "_side";
 
 /**
  * Cheap deterministic hash. Ground tiles pick their variant from this so a field of
@@ -86,6 +87,55 @@ function tileHash(x: number, y: number): number {
   let h = Math.imul(x, 374761393) + Math.imul(y, 668265263);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return (h ^ (h >>> 16)) >>> 0;
+}
+
+/**
+ * Everything in a room that blocks movement, worked out from the room data alone.
+ *
+ * Split out of buildRoom because buildRoom needs a canvas and this does not, which is
+ * what lets tests/world.test.mjs flood-fill a room and prove every part of it can
+ * actually be walked to. A floor plan that looks right and has a room sealed off behind
+ * a desk is a bug you find by playing, which is the worst time to find it.
+ */
+export function roomColliders(
+  def: RoomDef,
+  sizeOf: (name: string) => { w: number; h: number },
+): Rect[] {
+  const colliders: Rect[] = [];
+
+  for (const zone of def.floorZones ?? []) {
+    if (!zone.solid) continue;
+    colliders.push({
+      x: zone.tx * TILE,
+      y: def.wallHeight + zone.ty * TILE,
+      w: zone.tw * TILE,
+      h: zone.th * TILE,
+    });
+  }
+
+  for (const run of def.walls ?? []) {
+    const open = new Set<number>();
+    for (const gap of run.gaps ?? []) {
+      for (let i = 0; i < gap.len; i++) open.add(gap.at + i);
+    }
+    for (let i = 0; i < run.len; i++) {
+      if (open.has(i)) continue;
+      const tx = run.dir === "h" ? run.tx + i : run.tx;
+      const ty = run.dir === "v" ? run.ty + i : run.ty;
+      if (tx < 0 || ty < 0 || tx >= def.widthTiles || ty >= def.heightTiles) continue;
+      colliders.push({ x: tx * TILE, y: def.wallHeight + ty * TILE, w: TILE, h: TILE });
+    }
+  }
+
+  for (const p of def.props) {
+    // A takeable prop never blocks: it would leave an invisible wall behind once
+    // somebody picked it up.
+    if (!p.solid || p.takeable) continue;
+    colliders.push(p.collider ?? autoCollider(p, sizeOf(p.sprite)));
+  }
+
+  for (const b of def.blockers ?? []) colliders.push(b);
+  return colliders;
 }
 
 export function atlasFor(assets: Assets, id: AtlasId) {
@@ -123,7 +173,7 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
     }
   }
 
-  const colliders: Rect[] = [];
+  const colliders = roomColliders(def, get);
 
   for (const zone of def.floorZones ?? []) {
     const tiles = (zone.tiles ?? []).map(get);
@@ -140,14 +190,6 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
           : tiles[tileHash(tx + 977, ty + 311) % tiles.length];
         blit(t, tx * TILE, def.wallHeight + ty * TILE);
       }
-    }
-    if (zone.solid) {
-      colliders.push({
-        x: zone.tx * TILE,
-        y: def.wallHeight + zone.ty * TILE,
-        w: zone.tw * TILE,
-        h: zone.th * TILE,
-      });
     }
   }
 
@@ -183,7 +225,9 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
   // Cut into one segment per tile and pushed in with the props, so they depth sort
   // against characters instead of being baked flat. See WallRun for why per tile.
   for (const run of def.walls ?? []) {
-    const wall = get(run.tile ?? def.wallTile ?? "wall");
+    const tile = run.tile ?? def.wallTile ?? "wall";
+    const wall = get(tile);
+    const side = run.dir === "v" ? get(tile + SIDE) : wall;
     const open = new Set<number>();
     for (const gap of run.gaps ?? []) {
       for (let i = 0; i < gap.len; i++) open.add(gap.at + i);
@@ -196,18 +240,17 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
       const base = def.wallHeight + (ty + 1) * TILE;
       const isGap = open.has(i);
       if (run.dir === "v") {
-        // Seen from above: one tile of wallpaper body, filling its own square and
-        // nothing else. A gap is simply left out - there is no face to put a lintel on.
+        // Seen from above: one tile filling its own square and nothing else. A gap is
+        // simply left out - there is no face to put a lintel on.
         if (!isGap) {
           floorProps.push({
-            rect: { x: wall.x, y: wall.y + WALL_BODY_TOP, w: wall.w, h: TILE },
+            rect: side,
             x: tx * TILE,
             y: base - TILE,
             flip: false,
             sortY: base,
             propIndex: -1,
           });
-          colliders.push({ x: tx * TILE, y: def.wallHeight + ty * TILE, w: TILE, h: TILE });
         }
         continue;
       }
@@ -222,9 +265,6 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
         sortY: base,
         propIndex: -1,
       });
-      if (!isGap) {
-        colliders.push({ x: tx * TILE, y: def.wallHeight + ty * TILE, w: TILE, h: TILE });
-      }
     }
   }
 
@@ -258,13 +298,9 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
       });
     }
 
-    // A takeable prop never blocks: it would leave an invisible wall behind once
-    // somebody picked it up.
-    if (p.solid && !p.takeable) colliders.push(p.collider ?? autoCollider(p, rect));
   }
 
   floorProps.sort((a, b) => a.sortY - b.sortY);
-  for (const b of def.blockers ?? []) colliders.push(b);
 
   if (def.tint) {
     ctx.globalAlpha = def.tint.alpha;

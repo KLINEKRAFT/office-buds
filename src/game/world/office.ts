@@ -125,8 +125,10 @@ const walls: WallRun[] = [
   },
 
   // ---- inside the bands ---------------------------------------------------------------
-  // Kitchen from bathrooms.
-  { tx: 11, ty: 0, len: NORTH_WALL, dir: "v", gaps: [{ at: 4, len: 1 }] },
+  // Kitchen from bathrooms. One tile short of the north wall on purpose: run it the
+  // full depth and its last tile lands square on top of the kitchen's doorway onto the
+  // hallway, halving a two-tile opening.
+  { tx: 11, ty: 0, len: NORTH_WALL - 1, dir: "v", gaps: [{ at: 4, len: 1 }] },
   // Michael's office from the offices below it.
   { tx: 0, ty: 13, len: WEST_WALL, dir: "h", gaps: [{ at: 1, len: 2 }] },
   // Print room from the shared workspace.
@@ -226,10 +228,13 @@ export const office: RoomDef = {
      * Armchairs round a low table, a television on the wall, and no desk in it - the one
      * room in the building without one.
      */
-    { sprite: "whiteboard", x: col(2), y: row(0) + 12 },
+    // The hang out room has a doorway on two of its four sides, so the only wall the
+    // shelf can stand against is the top one. Anywhere else and it reached into an
+    // opening - it is 27px of collider in an 80px room.
+    { sprite: "shelf_mesh", x: col(1), y: row(1), solid: true },
+    { sprite: "whiteboard", x: col(3) + 4, y: row(0) + 12 },
     ...lounge(col(2), row(3), "tub_chair_white", "tub_chair_pink"),
-    { sprite: "plant_tall", x: col(0), y: row(1), takeable: true },
-    { sprite: "shelf_mesh", x: col(3), y: row(5) + 12, solid: true },
+    { sprite: "plant_tall", x: col(0), y: row(5), takeable: true },
 
     /* ---- KITCHEN (north, middle) -------------------------------------------------------- */
     {
@@ -241,7 +246,7 @@ export const office: RoomDef = {
     },
     { sprite: "coffee_station", x: col(6), y: row(1) - 2, bias: 8 },
     { sprite: "cabinet_white", x: col(9), y: row(1) },
-    { sprite: "water_cooler", x: col(6), y: row(4), solid: true },
+    { sprite: "water_cooler", x: col(9), y: row(4), solid: true },
     { sprite: "side_table", x: col(8), y: row(4) },
     { sprite: "chair_blue", x: col(8) - 16, y: row(4) - 2 },
     { sprite: "chair_red", x: col(8) + 16, y: row(4) - 2 },
@@ -258,9 +263,12 @@ export const office: RoomDef = {
      * Desks against the navy wall, the armchairs by the window. Colin sits here.
      */
     { sprite: "photo_group", x: col(19), y: row(0) + 10 },
-    ...workstation(col(18), row(2), { desk: "desk_grey", screen: "monitor_blue", extra: "keyboard" }),
-    ...workstation(col(20), row(2), { desk: "desk_cream", screen: "monitor", extra: "papers" }),
-    ...workstation(col(18), row(5), { desk: "desk", screen: "monitor", extra: "keyboard" }),
+    // Both desks on the same column, leaving a walkway up the left of the room. Three
+    // desks fitted, and left a four pixel gap between two of them - which is narrower
+    // than a person, so the top of the room and Colin's own chair were sealed off behind
+    // a wall of furniture. The flood fill in tests/world.test.mjs is what found it.
+    ...workstation(col(19), row(2), { desk: "desk_grey", screen: "monitor_blue", extra: "keyboard" }),
+    ...workstation(col(19), row(5), { desk: "desk", screen: "monitor", extra: "papers" }),
     { sprite: "plant_bushy", x: col(21), y: row(4) + 8, takeable: true },
 
     /* ---- MICHAEL'S OFFICE (west, off the hallway) ------------------------------------- */
@@ -276,7 +284,7 @@ export const office: RoomDef = {
 
     /* ---- PRINT ROOM (east, off the hallway) -------------------------------------------- */
     { sprite: "copier", x: col(18), y: row(8), solid: true },
-    { sprite: "printer_big", x: col(20), y: row(8), solid: true },
+    { sprite: "printer_big", x: col(21), y: row(9), solid: true },
     { sprite: "shelf_mesh_wide", x: col(19), y: row(11), solid: true },
     { sprite: "papers", x: col(21), y: row(10), takeable: true },
 
@@ -329,7 +337,7 @@ export const office: RoomDef = {
    * easy one to miss: a seat inside a collider is a spot findFreeSpawn quietly shuffles
    * you out of, so you arrive standing beside your desk rather than at it.
    */
-  seats: [{ id: "marketing_desk", x: col(18), y: row(2) - 8, dir: "down", kind: "lead" }],
+  seats: [{ id: "marketing_desk", x: col(19), y: row(2) - 8, dir: "down", kind: "lead" }],
 
   spawns: [
     // 0-1: out of the lift, in the south hallway.
