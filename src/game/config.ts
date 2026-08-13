@@ -51,6 +51,7 @@ export const CHAT_HISTORY_LIMIT = 60;
  */
 export const EMOTES: Array<{ clip: string; label: string; glyph: string }> = [
   { clip: "wave", label: "WAVE", glyph: "\u270B" },
+  { clip: "lift", label: "LIFT", glyph: "\u{1F4AA}" },
   { clip: "laptop", label: "LAPTOP", glyph: "\u{1F4BB}" },
 ];
 
@@ -70,6 +71,9 @@ export const PALETTE = {
   floor: "#3a3d52",
   shadow: "rgba(12,12,22,0.38)",
   accent: "#6f2236",
+  /** An unlit opening in the wall band, used for doorways. */
+  doorway: "#1b1b24",
+  doorwayLip: "#3a3a4a",
   bubbleBorder: "#22222d",
   bubbleFill: "#eae6da",
   nameFill: "#eae6da",

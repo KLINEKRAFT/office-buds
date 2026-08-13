@@ -3,13 +3,14 @@
 A tiny retro office where two friends can hang out — and a village outside it, for
 when the office gets old.
 
-One small manager's office with one desk. Open the game and you get a link; send it to a
-friend and they type their name to walk in as themselves. You end up behind the desk and
-they end up on the sofa beside it, talking in speech bubbles over your heads. That is the
-whole game, and it is meant to stay that way.
+One small office with one desk. Open the game and you get a link; send it to a friend and
+they type their first name to walk in as themselves. Colin ends up at the desk and
+everyone else in the chairs beside it, talking in speech bubbles over your heads. That is
+the whole game, and it is meant to stay that way.
 
-Nobody picks a character. A name is tied to a character in `src/game/cast.ts`, so the
-invite is "type who you are", not "choose an avatar".
+Nobody picks a character. You type your first name and a character is looked up in
+`src/game/cast.ts`, so the invite is "type who you are", not "choose an avatar". The cast
+is Colin, Michael, Alexis, Melanie and Tiffany; anyone else gets in as a guest.
 
 <!-- Built for phones first; works fine on a desktop browser too. -->
 
@@ -20,11 +21,11 @@ invite is "type who you are", not "choose an avatar".
 - **Desktop** — WASD or the arrow keys.
 - **CHAT** opens the composer. What you send floats above your head for a few seconds
   (longer messages linger longer) and your friend sees it in real time.
-- **WAVE** and, for Colin, **LAPTOP** — emote buttons only appear for animations that
-  character actually has art for.
+- **WAVE**, **LIFT** and **LAPTOP** — emote buttons only appear for animations that
+  character actually has art for, so a character with no wave sheet simply has no button.
 - **LOG** shows recent messages, so nothing is lost once a bubble fades.
-- Walk onto a sofa to sit on it, or back behind the desk to sit at it.
-- Walk into the office door to step outside on your own. Or say **"let's go outside"**
+- Walk onto a chair to sit in it, or in behind the desk to sit at it.
+- Walk out through the doorway to step outside on your own. Or say **"let's go outside"**
   and the whole room goes with you; say **"back to work"** out there to march everyone
   back in. The cottage is the way back in too.
 - The office code in the top-left copies (or opens the share sheet for) the invite link.
@@ -66,7 +67,7 @@ src/game/
   render/               renderer, speech bubbles, name plates
   net/                  transport interface + Supabase and same-browser drivers
 tools/                  Python art pipeline (run only when the source art changes)
-art-source/             the original high-resolution character, furniture and village art
+art-source/             high-resolution character sheets, and the vendored art packs
 public/assets/          generated atlases, committed so the app needs no build step
 ```
 
@@ -107,15 +108,20 @@ construction, so they are written as indexed PNGs — roughly a third the size o
 no visible change. The furniture atlas keeps its original anti-aliased edges and is left
 as RGBA.
 
-**Adding one.** Drop the sheet in `art-source/characters/<name>/`, run
+**Adding one.** Drop the five sheets in `art-source/characters/`, run
 `python3 tools/build_sprites.py`, then add a line to `CAST` in `src/game/cast.ts` tying a
 name to it. Nothing else needs to change — the entry screen, the name plate and the seat
 assignment all read from that list. A name that is not on the list still gets in, as a
 visitor on the default sprite, so an invite never dead-ends on a typo.
 
-Roles live on that list too, and typing "COLIN" is what makes someone the manager. There
-is no authentication behind it; for two friends sharing a link that is the right amount of
-security, and it is worth knowing rather than assuming otherwise.
+Which seat you arrive in lives on that list too, and typing "Colin" is what puts someone
+at the desk. There is no authentication behind it; for friends sharing a link that is the
+right amount of security, and it is worth knowing rather than assuming otherwise.
+
+Sheets do not all come back from the generator standing on the floor of their 640px box -
+some sit 15-20px high, which at 1/16 scale leaves a character hovering above their own
+shadow. The builder measures each character once and drops every one of their frames by
+the same amount, which closes the gap without disturbing the shared anchor.
 
 ### The room
 
@@ -219,8 +225,10 @@ npm run assets
 ```
 
 - `tools/build_sprites.py` — character sheets to 40x40 atlases
-- `tools/build_props.py` — packs the furniture, and draws the floor, wall, partition,
-  window, door and rug tiles the furniture pack does not include
+- `tools/build_office.py` — the office atlas: named pieces cut out of LimeZu's Modern
+  Office pack, wallpaper and floor tiles sliced off its room builder, plus the nine-slice
+  rug the pack does not include
+- `tools/build_props.py` — the previous furniture atlas, kept for reference
 - `tools/build_village.py` — the outdoor atlas: props scaled against the 40px character,
   desaturated to sit beside the office, and grass cut as 16 crops so it does not repeat
 - `tools/build_font.py` — rasterises the two bitmap fonts
@@ -242,5 +250,10 @@ Two notes on the outdoor art, both learned the hard way:
 
 ## Credits
 
-Characters, office furniture and village art are the project's own, in `art-source/`.
+Characters are the project's own, in `art-source/characters/`.
+
+The office is built from LimeZu's **Modern Office - Revamped**, vendored under
+`art-source/modern-office/` with its licence: commercial use is permitted, redistributing
+the art itself is not. The village pack is under `art-source/village/`.
+
 The bitmap fonts are rasterised from Liberation Sans Bold (SIL Open Font License 1.1).

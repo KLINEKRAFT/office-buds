@@ -1,5 +1,5 @@
 import type { Dir, Rect, Vec2 } from "../types";
-import type { Role } from "../cast";
+import type { SeatKind } from "../cast";
 
 /** Which atlas a room's art comes from. Rooms do not mix them. */
 export type AtlasId = "office" | "village";
@@ -95,8 +95,8 @@ export interface SeatDef {
   x: number;
   y: number;
   dir: Dir;
-  /** Who lands here on arrival. */
-  role: Role;
+  /** Which kind of arrival lands here. */
+  kind: SeatKind;
 }
 
 export interface RoomDef {
@@ -108,6 +108,10 @@ export interface RoomDef {
   heightTiles: number;
   /** Height in px of the wall band along the top edge. 0 for outdoor rooms. */
   wallHeight: number;
+  /** Which wallpaper the band is tiled from. Defaults to "wall". */
+  wallTile?: string;
+  /** Tile ranges where the band is cut away to leave a doorway. */
+  wallGaps?: Array<{ tx: number; tw: number }>;
   /** Base ground tiles, picked per tile by a hash so no pattern emerges. */
   groundTiles: string[];
   floorZones?: FloorZone[];

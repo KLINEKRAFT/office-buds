@@ -65,7 +65,7 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
           roomCode,
           name: profile.name,
           character: profile.character,
-          role: profile.role,
+          seat: profile.seat,
           // ?room=outside drops you straight into a place, for laying rooms out.
           startRoom: new URLSearchParams(window.location.search).get("room") ?? undefined,
           onStatus: (s) => !cancelled && setStatus(s),
@@ -105,7 +105,7 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
       gameRef.current = null;
       game?.dispose();
     };
-  }, [roomCode, profile.name, profile.character, profile.role]);
+  }, [roomCode, profile.name, profile.character, profile.seat]);
 
   useEffect(() => {
     if (composerOpen) {

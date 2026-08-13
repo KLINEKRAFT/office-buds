@@ -65,9 +65,10 @@ export function poseFor(player: Player, meta: CharacterMeta, speed: number): Pos
 
 /**
  * Emotes that hold on their last frame - the laptop, say - stay until the player moves
- * or triggers something else, rather than snapping back after a second.
+ * or triggers something else, rather than snapping back after a second. "lift" ends with
+ * both arms raised overhead, which has to persist or it reads as a flinch.
  */
-const HOLD_FOREVER = new Set(["laptop"]);
+const HOLD_FOREVER = new Set(["laptop", "lift"]);
 
 export function emoteFinished(meta: CharacterMeta, emote: string, time: number): boolean {
   if (!emote) return true;

@@ -1,5 +1,5 @@
 import type { Assets, SpriteRect } from "../core/assets";
-import { TILE } from "../config";
+import { PALETTE, TILE } from "../config";
 import type { Rect } from "../types";
 import type { AtlasId, PropDef, RoomDef } from "./types";
 
@@ -123,16 +123,28 @@ export function buildRoom(def: RoomDef, assets: Assets): BuiltRoom {
   }
 
   // ---- wall band (indoor rooms only) --------------------------------------
+  // The wallpaper carries its own cap and skirting, so the band is one sprite tiled
+  // sideways rather than three strips stacked. Doorways are cut as gaps: the pack has no
+  // door sprite, and from this angle an unlit opening in the wall reads as a doorway
+  // more honestly than a door drawn flat against it would.
   if (def.wallHeight > 0) {
-    const wall = get("wall");
-    const wallCap = get("wall_cap");
-    const baseboard = get("baseboard");
-    for (let y = 0; y < def.wallHeight; y += TILE) {
-      for (let x = 0; x < width; x += TILE) blit(wall, x, y);
-    }
-    for (let x = 0; x < width; x += TILE) blit(wallCap, x, 0);
+    const wall = get(def.wallTile ?? "wall");
     for (let x = 0; x < width; x += TILE) {
-      blit(baseboard, x, def.wallHeight - baseboard.h);
+      for (let y = 0; y < def.wallHeight; y += wall.h) blit(wall, x, y);
+    }
+    // The cap stays: an opening that runs to the ceiling reads as a missing wall, one
+    // with a lintel over it reads as a door.
+    const LINTEL = 7;
+    for (const gap of def.wallGaps ?? []) {
+      const gx = gap.tx * TILE;
+      const gw = gap.tw * TILE;
+      ctx.fillStyle = PALETTE.doorway;
+      ctx.fillRect(gx, LINTEL, gw, def.wallHeight - LINTEL);
+      ctx.fillStyle = PALETTE.doorwayLip;
+      ctx.fillRect(gx, LINTEL, gw, 1);
+      ctx.fillRect(gx, LINTEL, 1, def.wallHeight - LINTEL);
+      ctx.fillRect(gx + gw - 1, LINTEL, 1, def.wallHeight - LINTEL);
+      ctx.fillRect(gx, def.wallHeight - 1, gw, 1);
     }
   }
 

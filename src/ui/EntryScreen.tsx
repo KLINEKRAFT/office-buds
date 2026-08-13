@@ -61,12 +61,12 @@ export function EntryScreen({
         </div>
 
         <div className="panel">
-          <p className="label">Your name</p>
+          <p className="label">First name</p>
           <input
             className="field"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="TYPE YOUR NAME"
+            placeholder="TYPE YOUR FIRST NAME"
             maxLength={12}
             autoComplete="off"
             autoCapitalize="characters"
@@ -88,11 +88,13 @@ export function EntryScreen({
                 opacity: clean ? 1 : 0.35,
               }}
             />
+            {/* Who you are about to walk in as. Deliberately no title or role - the
+                name and the face are the whole of it. */}
             <div className="whoami__text">
               {clean ? (
                 <>
                   <strong>{member.name}</strong>
-                  <span>{known ? `${member.role.toUpperCase()}` : "GUEST"}</span>
+                  <span>{known ? "READY" : "NEW FACE"}</span>
                 </>
               ) : (
                 <span>Who are you?</span>

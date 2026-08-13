@@ -1,5 +1,5 @@
 export type Dir = "up" | "down" | "left" | "right";
-export type CharacterId = "colin" | "michael";
+export type CharacterId = "colin" | "michael" | "alexis" | "melanie" | "tiffany";
 
 export interface Vec2 {
   x: number;

@@ -21,7 +21,7 @@ import { Camera } from "./core/camera";
 import { Input } from "./core/input";
 import { Renderer } from "./render/renderer";
 import { createNet, type Net, type NetStatus } from "./net";
-import type { Role } from "./cast";
+import type { SeatKind } from "./cast";
 import type { Bubble, ChatMessage, CharacterId, Dir, Player, PlayerState, Vec2 } from "./types";
 import { buildRoom, type BuiltRoom } from "./world/build";
 import { bodyRect, findFreeSpawn, moveWithCollision } from "./world/collision";
@@ -33,8 +33,8 @@ export interface GameOptions {
   roomCode: string;
   name: string;
   character: CharacterId;
-  /** Decides where you land: the manager gets the desk, everyone else the sofa. */
-  role: Role;
+  /** Decides where you land: Colin gets the desk, everyone else the sofa. */
+  seat: SeatKind;
   startRoom?: string;
   onChat(message: ChatMessage): void;
   onStatus(status: NetStatus, detail?: string): void;
@@ -54,15 +54,15 @@ function bubbleDuration(text: string): number {
 }
 
 /**
- * Where somebody starts. Rooms with assigned seating put the manager behind the desk
- * and visitors on the sofa, so arriving already looks like a meeting; rooms without
+ * Where somebody starts. Rooms with assigned seating put Colin behind the desk and
+ * everyone else on the sofa, so arriving already looks like a meeting; rooms without
  * seats fall back to their ordinary join spawns.
  */
-function startPlace(room: BuiltRoom, role: Role): Vec2 & { dir: Dir } {
-  // First seat listed for the role, not a random one: the manager belongs at the desk
-  // and a visitor belongs on the sofa beside it. findFreeSpawn nudges the rare second
-  // visitor off to the spare chair rather than standing them inside somebody.
-  const seat = (room.def.seats ?? []).find((s) => s.role === role);
+function startPlace(room: BuiltRoom, kind: SeatKind): Vec2 & { dir: Dir } {
+  // First seat of the right kind, not a random one: Colin belongs at the desk and a
+  // guest belongs on the sofa beside it. findFreeSpawn nudges the rare second guest off
+  // to the spare chair rather than standing them inside somebody.
+  const seat = (room.def.seats ?? []).find((s) => s.kind === kind);
   if (seat) return { x: seat.x, y: seat.y, dir: seat.dir };
   const joinable = room.def.spawns.slice(0, room.def.joinSpawns ?? room.def.spawns.length);
   const spawn = joinable[Math.floor(Math.random() * joinable.length)] ??
@@ -112,7 +112,7 @@ export class Game {
   ) {
     this.room = room;
     const id = uid();
-    const start = startPlace(room, opts.role);
+    const start = startPlace(room, opts.seat);
     const free = findFreeSpawn(room, start.x, start.y);
 
     this.local = {
