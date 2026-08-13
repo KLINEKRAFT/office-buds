@@ -45,6 +45,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 Deploying to Vercel needs the same two variables set in the project settings. There is
 nothing else to configure — no database, no migrations, no auth.
 
+If they are missing the game still runs, but on the same-browser driver, and the status
+chip says **SAME DEVICE** rather than showing a plain player count. That distinction
+exists so it is obvious at a glance whether an invite link will actually reach anyone.
+
 ## How it is put together
 
 ```
@@ -125,6 +129,11 @@ Two ways to move between rooms, and they deliberately differ:
 Which room a player is in rides along in their movement packet, and players elsewhere
 simply are not drawn. The screen fades through black while the room is swapped, which
 also covers the outdoor atlas still downloading on a slow connection.
+
+A room's `spawns` serve two jobs: the first `joinSpawns` of them are where a fresh player
+starts, and the rest are addressed by index from an exit or a spoken trigger. They are
+kept apart on purpose — the arrival point sits right by a doorway, and a new player who
+started there walked straight back out on their first input.
 
 Laying out a room is easier with `?debug=1` (outlines every collider) and `?scale=N`
 (pins the zoom, e.g. `?scale=2` to see a whole room at once).

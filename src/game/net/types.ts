@@ -6,7 +6,13 @@ export interface NetIdentity {
   character: CharacterId;
 }
 
-export type NetStatus = "connecting" | "online" | "offline" | "error";
+/**
+ * "local" means the same-browser fallback is running because no realtime backend is
+ * configured. It is distinct from "online" on purpose: both find peers and both report
+ * a player count, so without separating them there is no way to tell from the screen
+ * whether an invite link will actually reach anybody.
+ */
+export type NetStatus = "connecting" | "online" | "local" | "offline" | "error";
 
 export interface NetHandlers {
   /** Fired for every peer already present and for each new arrival. */

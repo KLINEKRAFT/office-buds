@@ -140,13 +140,16 @@ export const office: RoomDef = {
 
   // Both spawns are in the top corridor just inside the door, so arriving feels like
   // walking into the office - and so two friends land within sight of each other.
+  // Offset to either side of the doorway on purpose. Spawning directly under it meant
+  // the very first press of "up" walked you straight back out and away from your friend.
   spawns: [
-    { x: 286, y: 64 },
-    { x: 318, y: 72 },
+    { x: 250, y: 72 },
+    { x: 344, y: 80 },
     // Index 2: where you land coming back from outside. Deliberately clear of the exit
     // rect below, or you would bounce straight back out again on arrival.
     { x: 300, y: 68 },
   ],
+  joinSpawns: 2,
 
   // Walking into the doorway steps outside - only you. Saying it takes everyone.
   // Reaches up to the wall base so walking into the door actually lands inside it.

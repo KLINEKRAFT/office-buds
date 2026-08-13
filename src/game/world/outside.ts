@@ -106,6 +106,7 @@ export const outside: RoomDef = {
     { x: 152, y: 192 },
     { x: 240, y: 236 },
   ],
+  joinSpawns: 2,
 
   // Walking back into the cottage returns you to the office, on its door spawn.
   exits: [{ rect: { x: 104, y: 152, w: 32, h: 10 }, to: "office", spawn: 2, label: "GO INSIDE" }],

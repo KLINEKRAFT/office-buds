@@ -35,6 +35,7 @@ export function createNet(
 export const STATUS_LABEL: Record<NetStatus, string> = {
   connecting: "CONNECTING",
   online: "ONLINE",
+  local: "SAME DEVICE",
   offline: "SOLO",
   error: "OFFLINE",
 };

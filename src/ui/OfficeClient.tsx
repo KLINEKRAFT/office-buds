@@ -143,7 +143,11 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
   }, []);
 
   const dotClass =
-    status === "online" ? "chip__dot" : status === "error" ? "chip__dot chip__dot--bad" : "chip__dot chip__dot--off";
+    status === "online"
+      ? "chip__dot"
+      : status === "error"
+        ? "chip__dot chip__dot--bad"
+        : "chip__dot chip__dot--off";
 
   return (
     <>
@@ -171,7 +175,11 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
           <div className="hud__topright">
             <span className="chip">
               <span className={dotClass} />
-              {status === "online" ? `${peers + 1} HERE` : STATUS_LABEL[status]}
+              {status === "online"
+                ? `${peers + 1} HERE`
+                : status === "local"
+                  ? `${peers + 1} HERE \u00B7 SAME DEVICE`
+                  : STATUS_LABEL[status]}
             </span>
             <button
               type="button"
@@ -292,6 +300,14 @@ function OfficeStage({ roomCode, profile }: { roomCode: string; profile: EntryRe
               <button type="button" className="btn btn--primary" onClick={invite}>
                 {shared ? "Link copied" : "Share invite link"}
               </button>
+
+              {status === "local" && (
+                <p className="hint" style={{ color: "#e0a3b2" }}>
+                  No realtime backend is configured, so this office only reaches other tabs
+                  on this device. Set NEXT_PUBLIC_SUPABASE_URL and
+                  NEXT_PUBLIC_SUPABASE_ANON_KEY to make invite links work.
+                </p>
+              )}
 
               <p className="label">Sound</p>
               <button type="button" className="btn" onClick={toggleMute}>

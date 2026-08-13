@@ -91,7 +91,8 @@ export class Game {
   ) {
     this.room = room;
     const id = uid();
-    const spawn = room.def.spawns[Math.floor(Math.random() * room.def.spawns.length)] ?? {
+    const joinable = room.def.spawns.slice(0, room.def.joinSpawns ?? room.def.spawns.length);
+    const spawn = joinable[Math.floor(Math.random() * joinable.length)] ?? {
       x: room.width / 2,
       y: room.height / 2,
     };

@@ -44,7 +44,7 @@ export class LocalNet implements Net {
     window.addEventListener("pagehide", this.sayGoodbye);
 
     this.post({ t: "hello", id: this.id, name: this.identity.name, character: this.identity.character });
-    handlers.onStatus("online", "same-device only");
+    handlers.onStatus("local", "same-device only");
   }
 
   private post(msg: Msg): void {

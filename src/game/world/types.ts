@@ -91,7 +91,14 @@ export interface RoomDef {
   props: PropDef[];
   /** Extra invisible blockers, e.g. keeping players out of a doorway. */
   blockers?: Rect[];
+  /**
+   * Arrival points. Index 0..joinSpawns-1 are where a fresh player starts; the rest are
+   * addressed by index from an exit or say-trigger, and are deliberately excluded from
+   * the random pick because they sit right by a doorway - starting there meant a new
+   * player could walk straight back out on their first input.
+   */
   spawns: Vec2[];
+  joinSpawns?: number;
   zones?: ZoneDef[];
   exits?: ExitDef[];
   sayTriggers?: SayTrigger[];
